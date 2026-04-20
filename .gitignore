@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+*.egg
+.env
+.env.*
+!.env.example
+!.env.dev.example
+
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.env.local
+.env.*.local
+
+# Docker
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code / Superpowers internal files
+.claude/
+.superpowers/
