@@ -11,7 +11,6 @@ from loggator.rag.retriever import retrieve
 from loggator.rag.embedder import index_docs
 from loggator.processing.mapreduce import analyze_chunks
 from loggator.processing.chunker import chunk_docs
-from loggator.ollama.client import OllamaClient
 
 router = APIRouter(tags=["chat"])
 
@@ -103,11 +102,13 @@ async def analyze_logs(body: AnalyzeIn):
             "error_count": 0,
             "warning_count": 0,
             "log_count": 0,
+            "chunk_count": 0,
+            "from_ts": from_ts.isoformat(),
+            "to_ts": to_ts.isoformat(),
         }
 
     chunks = chunk_docs(docs)
-    ollama = OllamaClient()
-    result = await analyze_chunks(chunks, ollama)
+    result = await analyze_chunks(chunks)
     result["log_count"] = len(docs)
     result["chunk_count"] = len(chunks)
     result["from_ts"] = from_ts.isoformat()
