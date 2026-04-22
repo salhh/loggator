@@ -2,10 +2,10 @@
 import asyncio
 import time
 from datetime import datetime, timezone
+from typing import Literal
 
 import httpx
-import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from pydantic import BaseModel
 from sqlalchemy import text
 
@@ -15,7 +15,6 @@ from loggator.opensearch.client import get_client
 from loggator.pipelines.scheduler import get_scheduler
 
 router = APIRouter(tags=["health"])
-log = structlog.get_logger()
 
 _TIMEOUT = 3.0
 
@@ -28,7 +27,7 @@ class CheckResult(BaseModel):
 
 class HealthResponse(BaseModel):
     checks: dict[str, CheckResult]
-    overall: str  # "ok" | "degraded" | "down"
+    overall: Literal["ok", "degraded", "down"]
 
 
 async def _check_database() -> CheckResult:
@@ -37,6 +36,7 @@ async def _check_database() -> CheckResult:
         async def _query():
             async with AsyncSessionLocal() as session:
                 await session.execute(text("SELECT 1"))
+                await session.rollback()
 
         await asyncio.wait_for(_query(), timeout=_TIMEOUT)
         return CheckResult(ok=True, latency_ms=int((time.monotonic() - t0) * 1000), detail="PostgreSQL connected")
@@ -61,7 +61,7 @@ async def _check_opensearch() -> CheckResult:
 
         count, colour = await asyncio.wait_for(_query(), timeout=_TIMEOUT)
         return CheckResult(
-            ok=True,
+            ok=colour != "red",
             latency_ms=int((time.monotonic() - t0) * 1000),
             detail=f"{count} indices, cluster: {colour}",
         )
@@ -75,7 +75,7 @@ async def _check_llm() -> CheckResult:
     t0 = time.monotonic()
     try:
         async def _query():
-            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            async with httpx.AsyncClient(timeout=_TIMEOUT - 0.2) as client:
                 r = await client.get(f"{settings.ollama_base_url}/api/tags")
                 r.raise_for_status()
 
@@ -127,8 +127,8 @@ async def _check_alerts() -> CheckResult:
     return CheckResult(ok=configured > 0, latency_ms=0, detail="  ".join(parts))
 
 
-@router.get("/health", response_model=HealthResponse)
-async def get_health():
+@router.get("/health")
+async def get_health(response: Response) -> HealthResponse:
     db, os_, llm, sched, alerts = await asyncio.gather(
         _check_database(),
         _check_opensearch(),
@@ -146,4 +146,6 @@ async def get_health():
     core_ok = db.ok and os_.ok
     all_ok = all(c.ok for c in checks.values())
     overall = "ok" if all_ok else ("degraded" if core_ok else "down")
+    if overall == "down":
+        response.status_code = 503
     return HealthResponse(checks=checks, overall=overall)
