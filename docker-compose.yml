@@ -62,7 +62,7 @@ services:
     env_file:
       - .env.prod
     environment:
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,6 +87,11 @@ services:
       - MAX_CLIENT_CONN=100
       - DEFAULT_POOL_SIZE=20
       - SERVER_RESET_QUERY=DISCARD ALL
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 5432 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     depends_on:
       postgres:
         condition: service_healthy
@@ -151,7 +156,7 @@ services:
       - ./.env.prod:/app/.env.prod
     depends_on:
       pgbouncer:
-        condition: service_started
+        condition: service_healthy
       opensearch:
         condition: service_healthy
     healthcheck:
@@ -204,15 +209,15 @@ services:
     container_name: backup
     volumes:
       - ./backups:/backups
-    entrypoint: >
-      sh -c "pg_dump -h pgbouncer -U $$POSTGRES_USER $$POSTGRES_DB
-      | gzip > /backups/loggator-$$(date +%Y%m%d-%H%M%S).sql.gz
-      && find /backups -name '*.sql.gz' -mtime +7 -delete
-      && echo 'Backup completed: '/backups/loggator-$$(date +%Y%m%d-%H%M%S).sql.gz"
-    env_file:
-      - .env.prod
+      - ./scripts/backup.sh:/backup.sh:ro
+    entrypoint: ["sh", "/backup.sh"]
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     depends_on:
-      - pgbouncer
+      postgres:
+        condition: service_healthy
     profiles:
       - backup
     restart: "no"
