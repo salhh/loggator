@@ -55,12 +55,12 @@ services:
     image: opensearchproject/opensearch:2.13.0
     environment:
       - discovery.type=single-node
-      - DISABLE_SECURITY_PLUGIN=true
       - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_PASSWORD}
     volumes:
       - opensearch_data:/usr/share/opensearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -v '\"status\":\"red\"'"]
+      test: ["CMD-SHELL", "curl -sf -u admin:${OPENSEARCH_PASSWORD} --insecure https://localhost:9200/_cluster/health | grep -v '\"status\":\"red\"'"]
       interval: 10s
       timeout: 10s
       retries: 15
@@ -74,8 +74,9 @@ services:
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:2.13.0
     environment:
-      - OPENSEARCH_HOSTS=["http://opensearch:9200"]
-      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+      - OPENSEARCH_HOSTS=["https://opensearch:9200"]
+      - OPENSEARCH_USERNAME=admin
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
     depends_on:
       opensearch:
         condition: service_healthy

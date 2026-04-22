@@ -1,4 +1,5 @@
 import structlog
+import sentry_sdk
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,15 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from loggator.config import settings
+
+# Initialize Sentry (no-op if SENTRY_DSN is empty)
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=settings.sentry_traces_sample_rate,
+        environment="production",
+    )
+
 from loggator.api.routes import summaries, anomalies, alerts, status, chat, logs
 from loggator.api.routes import settings as settings_routes
 from loggator.api.routes import schedule as schedule_routes
@@ -33,9 +43,16 @@ app = FastAPI(title="Loggator API", version="0.1.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# CORS — lock down to frontend origin in production
+cors_origins = (
+    ["*"] if settings.cors_allow_all
+    else [settings.frontend_url]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
