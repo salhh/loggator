@@ -5,9 +5,13 @@ import { usePathname } from "next/navigation";
 
 const nav = [
   { href: "/", label: "Dashboard" },
+  { href: "/logs", label: "Logs" },
   { href: "/summaries", label: "Summaries" },
   { href: "/anomalies", label: "Anomalies" },
   { href: "/alerts", label: "Alerts" },
+  { href: "/reports", label: "Reports" },
+  { href: "/stats", label: "Statistics" },
+  { href: "/health", label: "Health" },
   { href: "/chat", label: "Chat" },
   { href: "/settings", label: "Settings" },
 ];
