@@ -1,3 +1,6 @@
+# NOTE: Copy .env.prod.example to .env.prod and fill in values before deploying.
+# NEVER commit .env.prod to version control.
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -14,6 +17,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: "0.5"
 
   opensearch:
     image: opensearchproject/opensearch:2.13.0
@@ -30,6 +38,11 @@ services:
       interval: 10s
       timeout: 10s
       retries: 15
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: "0.5"
 
   opensearch-dashboards:
     image: opensearchproject/opensearch-dashboards:2.13.0
@@ -41,6 +54,11 @@ services:
     depends_on:
       opensearch:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
 
   api:
     build:
@@ -49,14 +67,14 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - .env.prod
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-loggator}:${POSTGRES_PASSWORD:-loggator}@postgres:5432/${POSTGRES_DB:-loggator}
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
-      - ENV_FILE_PATH=/app/.env
+      - ENV_FILE_PATH=/app/.env.prod
     volumes:
-      - ./.env:/app/.env
+      - ./.env.prod:/app/.env.prod
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,6 +86,11 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
 
   web:
     build:
@@ -83,6 +106,14 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+
+  # ── Monitoring Stack (--profile monitoring) ──────────────────────────────
+  # prometheus, grafana, alertmanager, node-exporter, loki added in Task 5
 
 volumes:
   postgres_data:

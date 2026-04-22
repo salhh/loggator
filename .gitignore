@@ -9,6 +9,7 @@ dist/
 .env.*
 !.env.example
 !.env.dev.example
+!.env.prod.example
 
 # Node
 node_modules/
