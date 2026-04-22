@@ -59,10 +59,10 @@ async def run_batch(
     try:
         result = await summarize_chunks(chunks)
     except Exception as exc:
-        log.error("batch.ollama.failed", error=str(exc))
+        log.error("batch.llm.failed", error=str(exc))
         return None
 
-    log.info("batch.ollama.done", error_count=result.get("error_count", 0))
+    log.info("batch.llm.done", error_count=result.get("error_count", 0))
 
     # ── 5. Persist to PostgreSQL ───────────────────────────────────────────────
     summary = Summary(

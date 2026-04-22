@@ -47,7 +47,7 @@ async def _process_batch(docs: list[dict], index_pattern: str, session) -> list[
             severity=severity,
             summary=summary,
             root_cause_hints=hints,
-            mitre_tactics=result.get("mitre_tactics", []),
+            mitre_tactics=result.get("mitre_tactics", []),  # TODO(Task 4): DB column added by migration
             raw_logs=[{"text": doc.get("message", "")} for doc in docs[:5]],
             model_used=settings.llm_provider,
         )

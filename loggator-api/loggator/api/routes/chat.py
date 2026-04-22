@@ -33,8 +33,7 @@ async def chat(body: ChatIn, session: AsyncSession = Depends(get_session)):
         SystemMessage(content=CHAT_SYSTEM),
         HumanMessage(content=f"Log context:\n{context}\n\nQuestion: {body.message}"),
     ]
-    response = await llm_chain._model.ainvoke(messages)
-    answer = response.content
+    answer = await llm_chain.ainvoke(messages)
 
     return ChatOut(answer=answer, context_logs=logs)
 

@@ -1,6 +1,8 @@
 import asyncio
 from typing import Any
 
+from langchain_core.messages import BaseMessage
+
 import structlog
 from langchain_anthropic import ChatAnthropic
 from langchain_ollama import ChatOllama
@@ -72,6 +74,17 @@ class LLMChain:
                           prompt_type=prompt_type, error=str(exc))
                 raise
             return result.model_dump()
+
+    async def ainvoke(self, messages: list[BaseMessage]) -> str:
+        """Free-form chat invocation — semaphore-gated, returns response text."""
+        async with self._semaphore:
+            log.debug("llm.ainvoke", provider=settings.llm_provider)
+            try:
+                result = await self._model.ainvoke(messages)
+            except Exception as exc:
+                log.error("llm.ainvoke.failed", provider=settings.llm_provider, error=str(exc))
+                raise
+            return result.content
 
 
 llm_chain = LLMChain()

@@ -74,7 +74,7 @@ async def summarize_chunks(
     log.info("summarize.reduce.start")
     final = await llm_chain.generate("summary_reduce", reduce_input)
 
-    # Ensure error_count is the sum from map step (more accurate than Ollama's guess)
+    # Ensure error_count is the sum from map step (more accurate than the LLM's guess)
     final["error_count"] = total_errors
     log.info("summarize.reduce.done", error_count=total_errors)
     return final
