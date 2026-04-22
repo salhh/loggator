@@ -77,6 +77,7 @@ services:
       - OPENSEARCH_HOSTS=["https://opensearch:9200"]
       - OPENSEARCH_USERNAME=admin
       - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
+      - OPENSEARCH_SSL_VERIFICATIONMODE=none
     depends_on:
       opensearch:
         condition: service_healthy
