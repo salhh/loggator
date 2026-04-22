@@ -1,0 +1,36 @@
+groups:
+  - name: loggator
+    rules:
+      - alert: APIHighErrorRate
+        expr: >
+          rate(http_requests_total{status_code=~"5.."}[5m])
+          /
+          rate(http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API error rate"
+          description: "5xx error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      - alert: APIDown
+        expr: up{job="loggator-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Loggator API is down"
+          description: "The API has been unreachable for more than 1 minute"
+
+      - alert: DiskSpaceLow
+        expr: >
+          (
+            node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs",fstype!="squashfs"}
+            / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs",fstype!="squashfs"}
+          ) < 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space low"
+          description: "Disk usage is above 85% on {{ $labels.instance }}"

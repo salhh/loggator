@@ -70,5 +70,14 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_rate_limit: str = "60/minute"
 
+    # Security
+    frontend_url: str = "http://localhost:3000"
+    cors_allow_all: bool = False  # set True only in dev, never in prod
+
+    # Observability
+    sentry_dsn: str = ""
+    sentry_traces_sample_rate: float = 0.2
+    sentry_environment: str = "production"
+
 
 settings = Settings()

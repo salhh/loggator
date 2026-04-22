@@ -1,0 +1,41 @@
+# Traefik v3 static configuration
+log:
+  level: INFO
+
+accessLog: {}
+
+api:
+  dashboard: true
+  insecure: false
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: ""          # overridden via ACME_EMAIL env var at runtime — see note below
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: loggator_default
+  file:
+    directory: /dynamic
+    watch: true
+
+# NOTE: ACME email cannot be interpolated in traefik.yml directly.
+# Set it via the Traefik CLI flag in docker-compose.yml instead:
+# --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}

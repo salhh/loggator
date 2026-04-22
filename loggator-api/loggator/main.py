@@ -1,12 +1,30 @@
 import structlog
+import sentry_sdk
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from loggator.config import settings
+
+# Auth module — IAM integration placeholder
+from loggator.auth import dependencies as _auth  # noqa: F401 — imported for startup validation
+
+# Initialize Sentry (no-op if SENTRY_DSN is empty)
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=settings.sentry_traces_sample_rate,
+        environment=settings.sentry_environment,
+        integrations=[StarletteIntegration(), FastApiIntegration()],
+    )
+
 from loggator.api.routes import summaries, anomalies, alerts, status, chat, logs
 from loggator.api.routes import settings as settings_routes
 from loggator.api.routes import schedule as schedule_routes
@@ -16,7 +34,17 @@ from loggator.api.routes import stats as stats_routes
 from loggator.api import websocket
 
 log = structlog.get_logger()
-limiter = Limiter(key_func=get_remote_address, default_limits=[settings.api_rate_limit])
+
+
+def _real_client_ip(request: Request) -> str:
+    """Read real client IP from X-Forwarded-For header (set by Traefik)."""
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host  # fallback for direct connections
+
+
+limiter = Limiter(key_func=_real_client_ip, default_limits=[settings.api_rate_limit])
 
 
 @asynccontextmanager
@@ -30,15 +58,27 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Loggator API", version="0.1.0", lifespan=lifespan)
+
+# Expose /metrics endpoint for Prometheus scraping
+Instrumentator().instrument(app).expose(app)
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# CORS — lock down to frontend origin in production
+cors_origins = (
+    ["*"] if settings.cors_allow_all
+    else [settings.frontend_url]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(status.router, prefix="/api/v1")
 app.include_router(summaries.router, prefix="/api/v1")

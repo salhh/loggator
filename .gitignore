@@ -9,6 +9,7 @@ dist/
 .env.*
 !.env.example
 !.env.dev.example
+!.env.prod.example
 
 # Node
 node_modules/
@@ -32,3 +33,6 @@ Thumbs.db
 # Claude Code / Superpowers internal files
 .claude/
 .superpowers/
+
+# Backup files
+backups/*.sql.gz

@@ -17,6 +17,10 @@ COPY . .
 
 RUN chmod +x /app/docker-entrypoint.sh
 
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser \
+    && chown -R appuser:appgroup /app
+USER appuser
+
 EXPOSE 8000
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
