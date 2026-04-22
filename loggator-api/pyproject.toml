@@ -1,7 +1,7 @@
 [project]
 name = "loggator-api"
 version = "0.1.0"
-description = "AI-powered log analysis tool — OpenSearch + Ollama"
+description = "AI-powered log analysis tool — OpenSearch + pluggable LLM"
 requires-python = ">=3.11"
 dependencies = [
     "aiosmtplib>=5.1.0",
@@ -21,6 +21,10 @@ dependencies = [
     "tiktoken>=0.12.0",
     "typer>=0.24.1",
     "uvicorn[standard]>=0.44.0",
+    "langchain-core>=0.3",
+    "langchain-ollama>=0.3",
+    "langchain-anthropic>=0.3",
+    "langchain-openai>=0.3",
 ]
 
 [project.scripts]

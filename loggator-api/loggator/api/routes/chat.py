@@ -1,10 +1,12 @@
-import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.config import settings
 from loggator.db.session import get_session, AsyncSessionLocal
+from loggator.llm.chain import llm_chain
+from loggator.llm.prompts import CHAT_SYSTEM
 from loggator.rag.retriever import retrieve
 from loggator.rag.embedder import index_docs
 from loggator.processing.mapreduce import analyze_chunks
@@ -12,11 +14,6 @@ from loggator.processing.chunker import chunk_docs
 from loggator.ollama.client import OllamaClient
 
 router = APIRouter(tags=["chat"])
-
-_SYSTEM = (
-    "You are a log analysis assistant. Use the provided log context to answer the user's question. "
-    "Be concise. If the logs don't contain relevant information, say so."
-)
 
 
 class ChatIn(BaseModel):
@@ -34,15 +31,12 @@ async def chat(body: ChatIn, session: AsyncSession = Depends(get_session)):
     logs = await retrieve(body.message, session, top_k=body.top_k)
 
     context = "\n".join(f"- {line}" for line in logs)
-    prompt = f"Log context:\n{context}\n\nQuestion: {body.message}"
 
-    async with httpx.AsyncClient(timeout=120) as http:
-        resp = await http.post(
-            f"{settings.ollama_base_url}/api/generate",
-            json={"model": settings.ollama_model, "system": _SYSTEM, "prompt": prompt, "stream": False},
-        )
-        resp.raise_for_status()
-        answer = resp.json().get("response", "")
+    messages = [
+        SystemMessage(content=CHAT_SYSTEM),
+        HumanMessage(content=f"Log context:\n{context}\n\nQuestion: {body.message}"),
+    ]
+    answer = await llm_chain.ainvoke(messages)
 
     return ChatOut(answer=answer, context_logs=logs)
 

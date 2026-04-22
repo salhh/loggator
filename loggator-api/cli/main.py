@@ -1,8 +1,6 @@
 import asyncio
 import json
 from pathlib import Path
-from typing import Optional
-
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -77,14 +75,12 @@ async def _test_connection():
 @app.command()
 def analyze_sample(
     file: Path = typer.Argument(..., help="Path to a log file (one JSON object per line or plain text)"),
-    model: Optional[str] = typer.Option(None, help="Override Ollama model"),
 ):
-    """Feed a log file to Ollama and print the anomaly analysis result."""
-    asyncio.run(_analyze_sample(file, model))
+    """Feed a log file to the LLM chain and print the anomaly analysis result."""
+    asyncio.run(_analyze_sample(file))
 
 
-async def _analyze_sample(file: Path, model: Optional[str]):
-    from loggator.ollama.client import OllamaClient
+async def _analyze_sample(file: Path):
     from loggator.processing.preprocessor import preprocess
     from loggator.processing.chunker import chunk_docs
     from loggator.processing.mapreduce import analyze_chunks_for_anomalies
@@ -113,11 +109,10 @@ async def _analyze_sample(file: Path, model: Optional[str]):
 
     # Chunk
     chunks = chunk_docs(clean)
-    console.print(f"[cyan]Split into {len(chunks)} chunk(s) for Ollama[/cyan]\n")
+    console.print(f"[cyan]Split into {len(chunks)} chunk(s) for analysis (provider: {settings.llm_provider})[/cyan]\n")
 
     # Analyze
-    client = OllamaClient(model=model or settings.ollama_model)
-    results = await analyze_chunks_for_anomalies(chunks, client)
+    results = await analyze_chunks_for_anomalies(chunks)
 
     for i, result in enumerate(results):
         if len(results) > 1:

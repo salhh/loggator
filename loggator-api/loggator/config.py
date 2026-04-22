@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, SecretStr
 from typing import Literal
 
 
@@ -28,6 +28,16 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3"
     ollama_concurrency: int = 3
     ollama_timeout: int = 120
+
+    # LLM provider abstraction
+    llm_provider: Literal["ollama", "anthropic", "openai"] = "ollama"
+    anthropic_api_key: SecretStr = SecretStr("")
+    anthropic_model: str = "claude-sonnet-4-6"
+    openai_api_key: SecretStr = SecretStr("")
+    openai_base_url: str = ""   # optional, for OpenAI-compatible endpoints
+    openai_model: str = "gpt-4o-mini"
+    llm_concurrency: int = 3
+    llm_timeout: int = 120
 
     # Pipeline
     batch_interval_minutes: int = 15

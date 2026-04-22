@@ -6,7 +6,6 @@ from loggator.config import settings
 from loggator.db.models import Summary, ScheduledAnalysis
 from loggator.db.session import AsyncSessionLocal
 from loggator.db.repository import SummaryRepository, ScheduledAnalysisRepository
-from loggator.ollama.client import OllamaClient
 from loggator.opensearch.client import get_client
 from loggator.opensearch.queries import range_query_logs
 from loggator.processing.preprocessor import preprocess
@@ -15,13 +14,23 @@ from loggator.processing.mapreduce import summarize_chunks, analyze_chunks
 
 log = structlog.get_logger()
 
+_MODEL_NAME = {
+    "anthropic": lambda: settings.anthropic_model,
+    "openai": lambda: settings.openai_model,
+    "ollama": lambda: settings.ollama_model,
+}
+
+
+def _active_model() -> str:
+    return _MODEL_NAME.get(settings.llm_provider, lambda: settings.ollama_model)()
+
 
 async def run_batch(
     window_minutes: int | None = None,
     index_pattern: str | None = None,
 ) -> Summary | None:
     """
-    Fetch logs from the last N minutes, run map-reduce summarization via Ollama,
+    Fetch logs from the last N minutes, run map-reduce summarization via LLM chain,
     and persist the result to PostgreSQL. Returns the saved Summary or None on error.
     """
     window = window_minutes or settings.batch_window_minutes
@@ -56,15 +65,14 @@ async def run_batch(
     chunks = chunk_docs(clean_docs)
     log.info("batch.chunked", chunks=len(chunks))
 
-    # ── 4. Map-reduce summarize via Ollama ────────────────────────────────────
-    ollama = OllamaClient()
+    # ── 4. Map-reduce summarize via LLM chain ─────────────────────────────────
     try:
-        result = await summarize_chunks(chunks, ollama)
+        result = await summarize_chunks(chunks)
     except Exception as exc:
-        log.error("batch.ollama.failed", error=str(exc))
+        log.error("batch.llm.failed", error=str(exc))
         return None
 
-    log.info("batch.ollama.done", error_count=result.get("error_count", 0))
+    log.info("batch.llm.done", error_count=result.get("error_count", 0))
 
     # ── 5. Persist to PostgreSQL ───────────────────────────────────────────────
     summary = Summary(
@@ -75,7 +83,7 @@ async def run_batch(
         top_issues=result.get("top_issues", []),
         error_count=int(result.get("error_count", 0)),
         recommendation=result.get("recommendation"),
-        model_used=settings.ollama_model,
+        model_used=_active_model(),
         tokens_used=None,
     )
 
@@ -131,12 +139,11 @@ async def run_scheduled_analysis(
 
     chunks = chunk_docs(clean_docs)
     log.info("scheduled_analysis.chunked", chunks=len(chunks))
-    ollama = OllamaClient()
     status = "success"
 
     # 3. Batch summary (non-fatal)
     try:
-        summary_result = await summarize_chunks(chunks, ollama)
+        summary_result = await summarize_chunks(chunks)
         async with AsyncSessionLocal() as session:
             await SummaryRepository(session).save(Summary(
                 window_start=from_ts, window_end=now, index_pattern=index,
@@ -144,7 +151,7 @@ async def run_scheduled_analysis(
                 top_issues=summary_result.get("top_issues", []),
                 error_count=int(summary_result.get("error_count", 0)),
                 recommendation=summary_result.get("recommendation"),
-                model_used=settings.ollama_model, tokens_used=None,
+                model_used=_active_model(), tokens_used=None,
             ))
         log.info("scheduled_analysis.summary.saved")
     except Exception as exc:
@@ -152,7 +159,7 @@ async def run_scheduled_analysis(
 
     # 4. Deep RCA
     try:
-        rca = await analyze_chunks(chunks, ollama)
+        rca = await analyze_chunks(chunks)
     except Exception as exc:
         log.error("scheduled_analysis.rca.failed", error=str(exc))
         status = "failed"
@@ -174,7 +181,7 @@ async def run_scheduled_analysis(
         error_count=int(rca.get("error_count", 0)),
         warning_count=int(rca.get("warning_count", 0)),
         log_count=len(clean_docs), chunk_count=len(chunks),
-        model_used=settings.ollama_model, status=status,
+        model_used=_active_model(), status=status,
     )
     async with AsyncSessionLocal() as session:
         saved = await ScheduledAnalysisRepository(session).save(record)

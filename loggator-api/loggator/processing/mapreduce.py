@@ -2,21 +2,13 @@ import asyncio
 import json
 import structlog
 
-from loggator.ollama.client import OllamaClient
-from loggator.ollama.prompts import (
-    ANOMALY_PROMPT,
-    SUMMARY_MAP_PROMPT,
-    SUMMARY_REDUCE_PROMPT,
-    ANALYSIS_MAP_PROMPT,
-    ANALYSIS_REDUCE_PROMPT,
-)
+from loggator.llm.chain import llm_chain
 
 log = structlog.get_logger()
 
 
 async def analyze_chunks_for_anomalies(
     chunks: list[str],
-    client: OllamaClient,
 ) -> list[dict]:
     """
     Map each chunk through the anomaly prompt in parallel.
@@ -24,7 +16,7 @@ async def analyze_chunks_for_anomalies(
     """
     async def _analyze_one(chunk: str, idx: int) -> dict:
         log.info("anomaly.map.chunk", idx=idx, lines=chunk.count("\n") + 1)
-        result = await client.generate(ANOMALY_PROMPT, chunk)
+        result = await llm_chain.generate("anomaly", chunk)
         return result
 
     tasks = [_analyze_one(chunk, i) for i, chunk in enumerate(chunks)]
@@ -42,11 +34,10 @@ async def analyze_chunks_for_anomalies(
 
 async def summarize_chunks(
     chunks: list[str],
-    client: OllamaClient,
 ) -> dict:
     """
     Map-reduce summarization:
-    1. Map: send each chunk to Ollama with SUMMARY_MAP_PROMPT in parallel
+    1. Map: send each chunk through the LLM chain (summary_map) in parallel
     2. Reduce: merge all partial summaries into one final report
     Returns the final summary dict.
     """
@@ -58,7 +49,7 @@ async def summarize_chunks(
 
     async def _map_one(chunk: str, idx: int) -> dict:
         log.info("summarize.map.chunk", idx=idx)
-        return await client.generate(SUMMARY_MAP_PROMPT, chunk)
+        return await llm_chain.generate("summary_map", chunk)
 
     map_tasks = [_map_one(chunk, i) for i, chunk in enumerate(chunks)]
     map_results = await asyncio.gather(*map_tasks, return_exceptions=True)
@@ -81,18 +72,18 @@ async def summarize_chunks(
 
     reduce_input = json.dumps(partial_summaries, indent=2)
     log.info("summarize.reduce.start")
-    final = await client.generate(SUMMARY_REDUCE_PROMPT, reduce_input)
+    final = await llm_chain.generate("summary_reduce", reduce_input)
 
-    # Ensure error_count is the sum from map step (more accurate than Ollama's guess)
+    # Ensure error_count is the sum from map step (more accurate than the LLM's guess)
     final["error_count"] = total_errors
     log.info("summarize.reduce.done", error_count=total_errors)
     return final
 
 
-async def analyze_chunks(chunks: list[str], client: OllamaClient) -> dict:
+async def analyze_chunks(chunks: list[str]) -> dict:
     """
     Deep root cause analysis via map-reduce:
-    1. Map: analyse each chunk with ANALYSIS_MAP_PROMPT in parallel
+    1. Map: analyse each chunk with analysis_map in parallel
     2. Reduce: merge all partial findings into one structured RCA report
     Returns the final analysis dict.
     """
@@ -111,7 +102,7 @@ async def analyze_chunks(chunks: list[str], client: OllamaClient) -> dict:
 
     async def _map_one(chunk: str, idx: int) -> dict:
         log.info("analyze.map.chunk", idx=idx)
-        return await client.generate(ANALYSIS_MAP_PROMPT, chunk)
+        return await llm_chain.generate("analysis_map", chunk)
 
     map_tasks = [_map_one(chunk, i) for i, chunk in enumerate(chunks)]
     map_results = await asyncio.gather(*map_tasks, return_exceptions=True)
@@ -130,10 +121,9 @@ async def analyze_chunks(chunks: list[str], client: OllamaClient) -> dict:
     log.info("analyze.map.done", partial_count=len(partial))
 
     if not partial:
-        raise RuntimeError("All map chunks failed — Ollama may be unreachable")
+        raise RuntimeError("All map chunks failed — LLM may be unreachable")
 
     if len(partial) == 1:
-        # Single chunk — synthesise the reduce shape from the map result
         m = partial[0]
         rca_list = [
             {"title": rc, "description": rc, "services": m.get("affected_services", []), "severity": "medium"}
@@ -151,7 +141,7 @@ async def analyze_chunks(chunks: list[str], client: OllamaClient) -> dict:
 
     reduce_input = json.dumps(partial, indent=2)
     log.info("analyze.reduce.start")
-    final = await client.generate(ANALYSIS_REDUCE_PROMPT, reduce_input)
+    final = await llm_chain.generate("analysis_reduce", reduce_input)
     final["error_count"] = total_errors
     final["warning_count"] = total_warnings
     log.info("analyze.reduce.done")
