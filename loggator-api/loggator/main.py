@@ -7,8 +7,12 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from loggator.config import settings
-from loggator.api.routes import summaries, anomalies, alerts, status, chat
+from loggator.api.routes import summaries, anomalies, alerts, status, chat, logs
 from loggator.api.routes import settings as settings_routes
+from loggator.api.routes import schedule as schedule_routes
+from loggator.api.routes import analysis_reports as analysis_reports_routes
+from loggator.api.routes import health as health_routes
+from loggator.api.routes import stats as stats_routes
 from loggator.api import websocket
 
 log = structlog.get_logger()
@@ -41,5 +45,10 @@ app.include_router(summaries.router, prefix="/api/v1")
 app.include_router(anomalies.router, prefix="/api/v1")
 app.include_router(alerts.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
+app.include_router(logs.router, prefix="/api/v1")
 app.include_router(settings_routes.router, prefix="/api/v1")
+app.include_router(schedule_routes.router, prefix="/api/v1")
+app.include_router(analysis_reports_routes.router, prefix="/api/v1")
+app.include_router(health_routes.router, prefix="/api/v1")
+app.include_router(stats_routes.router, prefix="/api/v1")
 app.include_router(websocket.router)
