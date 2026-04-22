@@ -1,7 +1,7 @@
 [project]
 name = "loggator-api"
 version = "0.1.0"
-description = "AI-powered log analysis tool — OpenSearch + Ollama"
+description = "AI-powered log analysis tool — OpenSearch + pluggable LLM"
 requires-python = ">=3.11"
 dependencies = [
     "aiosmtplib>=5.1.0",
