@@ -7,20 +7,52 @@
 #   3. (Optional) docker compose --profile backup run --rm backup  # manual backup
 
 services:
+  # Docker socket proxy — exposes a restricted Docker API over TCP (port 2375) to Traefik only.
+  # Benefits: Traefik never touches the raw docker.sock; only safe read-only endpoints are exposed.
+  # NOTE: On Windows Docker Desktop (MinAPIVersion=1.40), Traefik's Docker Go client starts
+  # negotiation at API 1.24 which Docker Desktop rejects. On a Linux VPS (MinAPIVersion≈1.12)
+  # this works correctly. Windows users: use docker context or test core services individually.
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: socket-proxy
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CONTAINERS=1
+      - SERVICES=1
+      - NETWORKS=1
+      - TASKS=1
+      - EVENTS=1
+      - INFO=1
+      - VERSION=1
+      - PING=1
+    networks:
+      - socket-proxy
+    deploy:
+      resources:
+        limits:
+          memory: 32m
+          cpus: "0.05"
+
   traefik:
-    image: traefik:v3.0.4
+    image: traefik:v3.3
     container_name: traefik
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/traefik.yml:/traefik.yml:ro
       - ./traefik/dynamic:/dynamic:ro
       - traefik_certs:/letsencrypt
     command:
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+    depends_on:
+      - socket-proxy
+    networks:
+      - default
+      - socket-proxy
     env_file:
       - .env.prod
     labels:
@@ -86,19 +118,20 @@ services:
           cpus: "0.25"
 
   pgbouncer:
-    image: pgbouncer/pgbouncer:1.22.0
+    image: edoburu/pgbouncer:latest
     container_name: pgbouncer
     restart: unless-stopped
     environment:
-      - DATABASES_HOST=postgres
-      - DATABASES_PORT=5432
-      - DATABASES_DBNAME=${POSTGRES_DB}
-      - DATABASES_USER=${POSTGRES_USER}
-      - DATABASES_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB}
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
       - POOL_MODE=transaction
       - MAX_CLIENT_CONN=100
       - DEFAULT_POOL_SIZE=20
       - SERVER_RESET_QUERY=DISCARD ALL
+      - AUTH_TYPE=scram-sha-256
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 5432 || exit 1"]
       interval: 5s
@@ -437,3 +470,8 @@ volumes:
   grafana_data:
   alertmanager_data:
   loki_data:
+
+networks:
+  default:
+  socket-proxy:
+    internal: true  # socket-proxy network is not reachable from outside
