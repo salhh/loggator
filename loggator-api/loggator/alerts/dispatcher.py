@@ -200,6 +200,83 @@ async def dispatch(anomaly: Anomaly, session) -> list[Alert]:
         alerts_created.append(await _record("webhook", settings.alert_webhook_url[:40], ok, err))
         log.info("dispatcher.webhook", ok=ok, anomaly_id=str(anomaly.id))
 
+    # Registry-based channels
+    try:
+        from loggator.db.alert_registry import list_enabled_channels_raw
+        reg_channels = await list_enabled_channels_raw(session)
+    except Exception:
+        reg_channels = []
+
+    for ch in reg_channels:
+        ch_type = ch.get("type", "")
+        ch_label = ch.get("label", ch_type)
+        cfg = ch.get("config", {})
+        try:
+            if ch_type == "slack":
+                webhook_url = cfg.get("webhook_url", "")
+                if not webhook_url:
+                    continue
+                import httpx as _httpx
+                severity_emoji = {"low": ":information_source:", "medium": ":warning:", "high": ":rotating_light:"}.get(anomaly.severity, ":warning:")
+                slack_body = {
+                    "text": f"{severity_emoji} *Loggator Anomaly Detected* — `{anomaly.severity.upper()}`",
+                    "blocks": [
+                        {"type": "section", "text": {"type": "mrkdwn",
+                            "text": f"{severity_emoji} *{anomaly.severity.upper()} anomaly* in `{anomaly.index_pattern}`\n{anomaly.summary}"}},
+                        {"type": "section", "fields": [
+                            {"type": "mrkdwn", "text": "*Root cause hints:*\n" + "\n".join(f"• {h}" for h in anomaly.root_cause_hints[:3])},
+                            {"type": "mrkdwn", "text": f"*Detected at:*\n{anomaly.detected_at.isoformat()}"},
+                        ]},
+                    ],
+                }
+                async with _httpx.AsyncClient(timeout=10) as client:
+                    resp = await client.post(webhook_url, json=slack_body)
+                    resp.raise_for_status()
+                ok, err = True, ""
+                dest = webhook_url[:40]
+            elif ch_type == "telegram":
+                bot_token = cfg.get("bot_token", "")
+                chat_id = cfg.get("chat_id", "")
+                if not bot_token or not chat_id:
+                    continue
+                icon = {"low": "\u2139\ufe0f", "medium": "\u26a0\ufe0f", "high": "\U0001f6a8"}.get(anomaly.severity, "\u26a0\ufe0f")
+                hints = "\n".join(f"  \u2022 {h}" for h in anomaly.root_cause_hints[:3])
+                text = (f"{icon} Loggator Alert \u2014 {anomaly.severity.upper()}\n"
+                        f"Index: {anomaly.index_pattern}\n{anomaly.summary}\n\nRoot cause hints:\n{hints}\n"
+                        f"Detected: {anomaly.detected_at.isoformat()}")
+                import httpx as _httpx
+                url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                async with _httpx.AsyncClient(timeout=10) as client:
+                    resp = await client.post(url, json={"chat_id": chat_id, "text": text})
+                    resp.raise_for_status()
+                ok, err = True, ""
+                dest = f"tg:{chat_id}"
+            elif ch_type == "email":
+                to_addr = cfg.get("to", "")
+                if not to_addr:
+                    continue
+                for addr in [a.strip() for a in to_addr.split(",") if a.strip()]:
+                    try:
+                        ok, err = await _send_email(anomaly, addr)
+                    except Exception as exc:
+                        ok, err = False, str(exc)
+                    alerts_created.append(await _record(f"email:{ch_label}", addr, ok, err))
+                    log.info("dispatcher.registry_email", label=ch_label, ok=ok, to=addr, anomaly_id=str(anomaly.id))
+                continue
+            elif ch_type == "webhook":
+                url = cfg.get("url", "")
+                if not url:
+                    continue
+                ok, err = await _send_webhook(anomaly, url)
+                dest = url[:40]
+            else:
+                continue
+        except Exception as exc:
+            ok, err = False, str(exc)
+            dest = ch_label
+        alerts_created.append(await _record(f"{ch_type}:{ch_label}", dest, ok, err))
+        log.info("dispatcher.registry_channel", type=ch_type, label=ch_label, ok=ok, anomaly_id=str(anomaly.id))
+
     if alerts_created:
         _record_sent(anomaly.index_pattern, anomaly.severity)
         if any(a.status == "sent" for a in alerts_created):

@@ -81,6 +81,26 @@ export interface ScheduledAnalysis {
   status: "success" | "failed";
 }
 
+export interface AlertChannel {
+  id: string;
+  label: string;
+  type: "slack" | "telegram" | "email" | "webhook";
+  config: Record<string, string>;
+  enabled: boolean;
+  updated_at: string | null;
+}
+
+export interface LLMConfig {
+  id: string;
+  label: string;
+  provider: "ollama" | "anthropic" | "openai";
+  model: string;
+  base_url: string;
+  api_key: string;   // masked
+  is_default: boolean;
+  updated_at: string | null;
+}
+
 export interface ScheduleStatus {
   enabled: boolean;
   interval_minutes: number;

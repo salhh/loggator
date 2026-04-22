@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
-import type { ScheduleStatus } from "@/lib/types";
+import type { ScheduleStatus, LLMConfig, AlertChannel } from "@/lib/types";
 
 interface Props {
   initial: Record<string, string>;
@@ -23,6 +23,7 @@ const ALERT_KEYS = new Set([
 const TABS = [
   { id: "alerts",   label: "Alerts" },
   { id: "schedule", label: "Schedule" },
+  { id: "llms",     label: "LLMs" },
   { id: "advanced", label: "Advanced" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -233,9 +234,131 @@ export default function SettingsClient({ initial, envFile }: Props) {
   const [testLoading, setTestLoading] = useState<Record<string, boolean>>({});
   const [openGuide, setOpenGuide] = useState<string | null>(null);
 
+  // LLMs tab state
+  const [llms, setLlms] = useState<LLMConfig[]>([]);
+  const [llmLoading, setLlmLoading] = useState(false);
+  const [llmTestResults, setLlmTestResults] = useState<Record<string, string>>({});
+  const [llmTestLoading, setLlmTestLoading] = useState<Record<string, boolean>>({});
+  const [editingLlm, setEditingLlm] = useState<Partial<LLMConfig> | null>(null);
+  const [llmSaving, setLlmSaving] = useState(false);
+
+  const emptyLlm: Omit<LLMConfig, "id" | "updated_at"> = {
+    label: "", provider: "ollama", model: "", base_url: "", api_key: "", is_default: false,
+  };
+
+  // Alert channels tab state
+  const [channels, setChannels] = useState<AlertChannel[]>([]);
+  const [chTestResults, setChTestResults] = useState<Record<string, string>>({});
+  const [chTestLoading, setChTestLoading] = useState<Record<string, boolean>>({});
+  const [editingCh, setEditingCh] = useState<Partial<AlertChannel> | null>(null);
+  const [chSaving, setChSaving] = useState(false);
+  const [chDeleting, setChDeleting] = useState(false);
+
+  const emptyCh: Omit<AlertChannel, "id" | "updated_at"> = {
+    label: "", type: "slack", config: {}, enabled: true,
+  };
+
   useEffect(() => {
     api.scheduleStatus().then(setScheduleStatus).catch(() => {});
+    api.llms().then(setLlms).catch(() => {});
+    api.alertChannels().then(setChannels).catch(() => {});
   }, []);
+
+  async function saveCh() {
+    if (!editingCh) return;
+    setChSaving(true);
+    try {
+      const payload = {
+        label: editingCh.label ?? "",
+        type: editingCh.type ?? "slack",
+        config: editingCh.config ?? {},
+        enabled: editingCh.enabled ?? true,
+      };
+      if (editingCh.id) {
+        const updated = await api.updateAlertChannel(editingCh.id, payload);
+        setChannels((prev) => prev.map((c) => c.id === updated.id ? updated : c));
+      } else {
+        const created = await api.createAlertChannel(payload);
+        setChannels((prev) => [...prev, created]);
+      }
+      setEditingCh(null);
+    } catch { alert("Failed to save channel."); }
+    finally { setChSaving(false); }
+  }
+
+  async function deleteCh(id: string) {
+    if (!confirm("Delete this alert channel?")) return;
+    setChDeleting(true);
+    try {
+      await api.deleteAlertChannel(id);
+      setChannels((prev) => prev.filter((c) => c.id !== id));
+    } catch { alert("Failed to delete channel."); }
+    finally { setChDeleting(false); }
+  }
+
+  async function testCh(id: string) {
+    setChTestLoading((p) => ({ ...p, [id]: true }));
+    setChTestResults((p) => ({ ...p, [id]: "" }));
+    try {
+      const res = await api.testAlertChannel(id);
+      setChTestResults((p) => ({ ...p, [id]: res.ok ? "✓ Test sent" : `✗ ${res.error ?? "failed"}` }));
+    } catch {
+      setChTestResults((p) => ({ ...p, [id]: "✗ Request failed" }));
+    } finally {
+      setChTestLoading((p) => ({ ...p, [id]: false }));
+    }
+  }
+
+  function setChConfig(key: string, value: string) {
+    setEditingCh((p) => p ? { ...p, config: { ...(p.config ?? {}), [key]: value } } : p);
+  }
+
+  async function saveLlm() {
+    if (!editingLlm) return;
+    setLlmSaving(true);
+    try {
+      const payload = {
+        label: editingLlm.label ?? "",
+        provider: editingLlm.provider ?? "ollama",
+        model: editingLlm.model ?? "",
+        base_url: editingLlm.base_url ?? "",
+        api_key: editingLlm.api_key ?? "",
+        is_default: editingLlm.is_default ?? false,
+      };
+      if (editingLlm.id) {
+        const updated = await api.updateLlm(editingLlm.id, payload);
+        setLlms((prev) => prev.map((l) => l.id === updated.id ? updated : l));
+      } else {
+        const created = await api.createLlm(payload);
+        setLlms((prev) => [...prev, created]);
+      }
+      setEditingLlm(null);
+    } catch { alert("Failed to save LLM."); }
+    finally { setLlmSaving(false); }
+  }
+
+  async function deleteLlm(id: string) {
+    if (!confirm("Delete this LLM configuration?")) return;
+    setLlmLoading(true);
+    try {
+      await api.deleteLlm(id);
+      setLlms((prev) => prev.filter((l) => l.id !== id));
+    } catch { alert("Failed to delete LLM."); }
+    finally { setLlmLoading(false); }
+  }
+
+  async function testLlm(id: string) {
+    setLlmTestLoading((p) => ({ ...p, [id]: true }));
+    setLlmTestResults((p) => ({ ...p, [id]: "" }));
+    try {
+      const res = await api.testLlm(id);
+      setLlmTestResults((p) => ({ ...p, [id]: res.ok ? `✓ ${res.response?.slice(0, 60) ?? "ok"}` : `✗ ${res.error ?? "failed"}` }));
+    } catch {
+      setLlmTestResults((p) => ({ ...p, [id]: "✗ Request failed" }));
+    } finally {
+      setLlmTestLoading((p) => ({ ...p, [id]: false }));
+    }
+  }
 
   function onChange(key: string, value: string) {
     setValues((p) => ({ ...p, [key]: value }));
@@ -311,6 +434,174 @@ export default function SettingsClient({ initial, envFile }: Props) {
       {/* ── Alerts tab ───────────────────────────────────────────────────── */}
       {tab === "alerts" && (
         <div className="space-y-4">
+
+          {/* ── Channel registry ─────────────────────────────────────────── */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold text-foreground">Alert Channels</div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Add multiple Slack, Telegram, Email, or Webhook destinations. All enabled channels receive every alert.
+                </p>
+              </div>
+            </div>
+
+            {channels.length > 0 && (
+              <div className="space-y-2">
+                {channels.map((ch) => (
+                  <div key={ch.id} className="bg-card border border-border rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${
+                          ch.type === "slack" ? "bg-purple-950/40 text-purple-400 border-purple-900"
+                            : ch.type === "telegram" ? "bg-blue-950/40 text-blue-400 border-blue-900"
+                            : ch.type === "email" ? "bg-amber-950/40 text-amber-400 border-amber-900"
+                            : "bg-zinc-900 text-zinc-400 border-zinc-700"
+                        }`}>
+                          {ch.type}
+                        </span>
+                        <span className="text-sm font-medium text-foreground truncate">{ch.label}</span>
+                        <span className={`text-[10px] px-1 py-0.5 rounded ${ch.enabled ? "text-emerald-400" : "text-muted-foreground"}`}>
+                          {ch.enabled ? "enabled" : "disabled"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button onClick={() => testCh(ch.id)} disabled={!!chTestLoading[ch.id]}
+                          className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:border-cyan-400 transition-colors disabled:opacity-40">
+                          {chTestLoading[ch.id] ? "Testing…" : "Test"}
+                        </button>
+                        <button onClick={() => setEditingCh(ch)}
+                          className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:border-cyan-400 transition-colors">
+                          Edit
+                        </button>
+                        <button onClick={() => deleteCh(ch.id)} disabled={chDeleting}
+                          className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:text-red-400 hover:border-red-900 transition-colors disabled:opacity-40">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                    {chTestResults[ch.id] && (
+                      <p className={`text-xs font-mono ${chTestResults[ch.id].startsWith("✓") ? "text-emerald-400" : "text-red-400"}`}>
+                        {chTestResults[ch.id]}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {channels.length === 0 && !editingCh && (
+              <p className="text-sm text-muted-foreground py-1">No alert channels configured yet.</p>
+            )}
+
+            {/* Add / Edit form */}
+            {editingCh ? (
+              <div className="bg-card border border-cyan-400/30 rounded-lg p-4 space-y-3">
+                <div className="text-sm font-semibold text-foreground">{editingCh.id ? "Edit channel" : "Add channel"}</div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Label">
+                    <Input value={editingCh.label ?? ""} onChange={(e) => setEditingCh((p) => ({ ...p, label: e.target.value }))}
+                      placeholder="e.g. #alerts" className="bg-background border-border text-sm" />
+                  </Field>
+                  <Field label="Type">
+                    <select value={editingCh.type ?? "slack"}
+                      onChange={(e) => setEditingCh((p) => ({ ...p, type: e.target.value as AlertChannel["type"], config: {} }))}
+                      className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-cyan-400 transition-colors">
+                      <option value="slack">Slack</option>
+                      <option value="telegram">Telegram</option>
+                      <option value="email">Email</option>
+                      <option value="webhook">Webhook</option>
+                    </select>
+                  </Field>
+                </div>
+
+                {editingCh.type === "slack" && (
+                  <Field label="Webhook URL">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <SecretInput value={editingCh.config?.webhook_url ?? ""}
+                          onChange={(v) => setChConfig("webhook_url", v)} isDirty={false} />
+                      </div>
+                      <GuideButton guide="slack" onOpen={setOpenGuide} />
+                    </div>
+                  </Field>
+                )}
+
+                {editingCh.type === "telegram" && (
+                  <>
+                    <Field label="Bot Token">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <SecretInput value={editingCh.config?.bot_token ?? ""}
+                            onChange={(v) => setChConfig("bot_token", v)} isDirty={false} />
+                        </div>
+                        <GuideButton guide="telegram" onOpen={setOpenGuide} />
+                      </div>
+                    </Field>
+                    <Field label="Chat ID" helper="Numeric ID (e.g. -1001234567890) or @channelname">
+                      <Input value={editingCh.config?.chat_id ?? ""}
+                        onChange={(e) => setChConfig("chat_id", e.target.value)}
+                        className="bg-background border-border text-sm font-mono" />
+                    </Field>
+                  </>
+                )}
+
+                {editingCh.type === "email" && (
+                  <Field label="Recipients" helper="Comma-separated email addresses. SMTP settings apply globally.">
+                    <Input value={editingCh.config?.to ?? ""}
+                      onChange={(e) => setChConfig("to", e.target.value)}
+                      placeholder="alice@example.com, bob@example.com"
+                      className="bg-background border-border text-sm" />
+                  </Field>
+                )}
+
+                {editingCh.type === "webhook" && (
+                  <Field label="URL">
+                    <Input value={editingCh.config?.url ?? ""}
+                      onChange={(e) => setChConfig("url", e.target.value)}
+                      placeholder="https://example.com/webhook"
+                      className="bg-background border-border text-sm font-mono" />
+                  </Field>
+                )}
+
+                <Field label="Enabled">
+                  <div className="flex items-center gap-3">
+                    <button type="button"
+                      onClick={() => setEditingCh((p) => p ? { ...p, enabled: !p.enabled } : p)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                        editingCh.enabled ? "bg-cyan-400" : "bg-border"
+                      }`}>
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        editingCh.enabled ? "translate-x-4" : "translate-x-0"
+                      }`} />
+                    </button>
+                    <span className="text-sm text-muted-foreground">{editingCh.enabled ? "Enabled" : "Disabled"}</span>
+                  </div>
+                </Field>
+
+                <div className="flex gap-2 pt-1">
+                  <button onClick={saveCh} disabled={chSaving || !editingCh.label}
+                    className="px-4 py-1.5 rounded-md bg-cyan-400 text-black text-sm font-semibold hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                    {chSaving ? "Saving…" : (editingCh.id ? "Save changes" : "Add channel")}
+                  </button>
+                  <button onClick={() => setEditingCh(null)}
+                    className="px-4 py-1.5 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setEditingCh(emptyCh)}
+                className="px-4 py-2 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:border-cyan-400 transition-colors">
+                + Add channel
+              </button>
+            )}
+          </div>
+
+          <div className="border-t border-border/60 pt-4 space-y-4">
+            <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Global settings</div>
+
           {/* General */}
           <Card title="General">
             <Field label="Severity threshold" helper="Only anomalies at or above this level trigger alerts.">
@@ -417,6 +708,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
             </Field>
             <TestBtn channel="webhook" loading={!!testLoading["webhook"]} result={testResults["webhook"] ?? ""} onTest={() => testChannel("webhook")} />
           </Card>
+          </div>
         </div>
       )}
 
@@ -481,6 +773,136 @@ export default function SettingsClient({ initial, envFile }: Props) {
               </div>
             )}
           </Card>
+        </div>
+      )}
+
+      {/* ── LLMs tab ─────────────────────────────────────────────────────── */}
+      {tab === "llms" && (
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Configure local (Ollama) and remote (Anthropic, OpenAI-compatible) LLMs. Select any from the Chat page dropdown.
+          </p>
+
+          {/* LLM list */}
+          {llms.length > 0 && (
+            <div className="space-y-2">
+              {llms.map((llm) => (
+                <div key={llm.id} className="bg-card border border-border rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${
+                        llm.provider === "anthropic" ? "bg-amber-950/40 text-amber-400 border-amber-900"
+                          : llm.provider === "openai" ? "bg-emerald-950/40 text-emerald-400 border-emerald-900"
+                          : "bg-cyan-950/40 text-cyan-400 border-cyan-900/40"
+                      }`}>
+                        {llm.provider}
+                      </span>
+                      <span className="text-sm font-medium text-foreground truncate">{llm.label}</span>
+                      <span className="text-xs text-muted-foreground font-mono truncate">{llm.model}</span>
+                      {llm.base_url && <span className="text-xs text-muted-foreground truncate hidden sm:block">{llm.base_url}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => testLlm(llm.id)}
+                        disabled={!!llmTestLoading[llm.id]}
+                        className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:border-cyan-400 transition-colors disabled:opacity-40"
+                      >
+                        {llmTestLoading[llm.id] ? "Testing…" : "Test"}
+                      </button>
+                      <button
+                        onClick={() => setEditingLlm(llm)}
+                        className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:border-cyan-400 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteLlm(llm.id)}
+                        disabled={llmLoading}
+                        className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:text-red-400 hover:border-red-900 transition-colors disabled:opacity-40"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  {llmTestResults[llm.id] && (
+                    <p className={`text-xs font-mono ${llmTestResults[llm.id].startsWith("✓") ? "text-emerald-400" : "text-red-400"}`}>
+                      {llmTestResults[llm.id]}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {llms.length === 0 && !editingLlm && (
+            <p className="text-sm text-muted-foreground py-2">No additional LLMs configured yet.</p>
+          )}
+
+          {/* Add / Edit form */}
+          {editingLlm ? (
+            <div className="bg-card border border-cyan-400/30 rounded-lg p-4 space-y-3">
+              <div className="text-sm font-semibold text-foreground">{editingLlm.id ? "Edit LLM" : "Add LLM"}</div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Label">
+                  <Input value={editingLlm.label ?? ""} onChange={(e) => setEditingLlm((p) => ({ ...p, label: e.target.value }))}
+                    placeholder="e.g. GPT-4o Mini" className="bg-background border-border text-sm" />
+                </Field>
+                <Field label="Provider">
+                  <select value={editingLlm.provider ?? "ollama"}
+                    onChange={(e) => setEditingLlm((p) => ({ ...p, provider: e.target.value as LLMConfig["provider"] }))}
+                    className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-cyan-400 transition-colors">
+                    <option value="ollama">Ollama (local)</option>
+                    <option value="openai">OpenAI / compatible</option>
+                    <option value="anthropic">Anthropic</option>
+                  </select>
+                </Field>
+              </div>
+
+              <Field label="Model name" helper={
+                editingLlm.provider === "ollama" ? "e.g. llama3, mistral, codellama"
+                  : editingLlm.provider === "anthropic" ? "e.g. claude-sonnet-4-6, claude-opus-4-7"
+                  : "e.g. gpt-4o-mini, gpt-4o"
+              }>
+                <Input value={editingLlm.model ?? ""} onChange={(e) => setEditingLlm((p) => ({ ...p, model: e.target.value }))}
+                  placeholder="model name" className="bg-background border-border text-sm font-mono" />
+              </Field>
+
+              {(editingLlm.provider === "ollama" || editingLlm.provider === "openai") && (
+                <Field label="Base URL" helper={
+                  editingLlm.provider === "ollama"
+                    ? "Leave blank for default (http://host.docker.internal:11434)"
+                    : "Leave blank for api.openai.com — set for Groq, Together, LM Studio, etc."
+                }>
+                  <Input value={editingLlm.base_url ?? ""} onChange={(e) => setEditingLlm((p) => ({ ...p, base_url: e.target.value }))}
+                    placeholder={editingLlm.provider === "ollama" ? "http://host.docker.internal:11434" : "https://api.groq.com/openai/v1"}
+                    className="bg-background border-border text-sm font-mono" />
+                </Field>
+              )}
+
+              {editingLlm.provider !== "ollama" && (
+                <Field label="API key">
+                  <SecretInput value={editingLlm.api_key ?? ""} onChange={(v) => setEditingLlm((p) => ({ ...p, api_key: v }))} isDirty={false} />
+                </Field>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={saveLlm} disabled={llmSaving || !editingLlm.label || !editingLlm.model}
+                  className="px-4 py-1.5 rounded-md bg-cyan-400 text-black text-sm font-semibold hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  {llmSaving ? "Saving…" : (editingLlm.id ? "Save changes" : "Add LLM")}
+                </button>
+                <button onClick={() => setEditingLlm(null)}
+                  className="px-4 py-1.5 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setEditingLlm(emptyLlm)}
+              className="px-4 py-2 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:border-cyan-400 transition-colors">
+              + Add LLM
+            </button>
+          )}
         </div>
       )}
 
