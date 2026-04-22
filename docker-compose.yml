@@ -1,5 +1,10 @@
 # NOTE: Copy .env.prod.example to .env.prod and fill in values before deploying.
 # NEVER commit .env.prod to version control.
+#
+# Production deploy sequence:
+#   1. docker compose run --rm migrate    # run DB migrations (one-shot)
+#   2. docker compose up -d               # start all services
+#   3. (Optional) docker compose --profile backup run --rm backup  # manual backup
 
 services:
   traefik:
@@ -51,6 +56,46 @@ services:
           memory: 1g
           cpus: "0.5"
 
+  migrate:
+    build: ./loggator-api
+    command: ["alembic", "upgrade", "head"]
+    env_file:
+      - .env.prod
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.25"
+
+  pgbouncer:
+    image: pgbouncer/pgbouncer:1.22.0
+    container_name: pgbouncer
+    restart: unless-stopped
+    environment:
+      - DATABASES_HOST=postgres
+      - DATABASES_PORT=5432
+      - DATABASES_DBNAME=${POSTGRES_DB}
+      - DATABASES_USER=${POSTGRES_USER}
+      - DATABASES_PASSWORD=${POSTGRES_PASSWORD}
+      - POOL_MODE=transaction
+      - MAX_CLIENT_CONN=100
+      - DEFAULT_POOL_SIZE=20
+      - SERVER_RESET_QUERY=DISCARD ALL
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+          cpus: "0.1"
+
   opensearch:
     image: opensearchproject/opensearch:2.13.0
     environment:
@@ -95,7 +140,7 @@ services:
     env_file:
       - .env.prod
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-loggator}:${POSTGRES_PASSWORD:-loggator}@postgres:5432/${POSTGRES_DB:-loggator}
+      - DATABASE_URL=${DATABASE_URL}
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
       - OPENSEARCH_AUTH_TYPE=${OPENSEARCH_AUTH_TYPE}
@@ -105,8 +150,8 @@ services:
     volumes:
       - ./.env.prod:/app/.env.prod
     depends_on:
-      postgres:
-        condition: service_healthy
+      pgbouncer:
+        condition: service_started
       opensearch:
         condition: service_healthy
     healthcheck:
@@ -153,6 +198,29 @@ services:
         limits:
           memory: 256m
           cpus: "0.5"
+
+  backup:
+    image: postgres:16-alpine
+    container_name: backup
+    volumes:
+      - ./backups:/backups
+    entrypoint: >
+      sh -c "pg_dump -h pgbouncer -U $$POSTGRES_USER $$POSTGRES_DB
+      | gzip > /backups/loggator-$$(date +%Y%m%d-%H%M%S).sql.gz
+      && find /backups -name '*.sql.gz' -mtime +7 -delete
+      && echo 'Backup completed: '/backups/loggator-$$(date +%Y%m%d-%H%M%S).sql.gz"
+    env_file:
+      - .env.prod
+    depends_on:
+      - pgbouncer
+    profiles:
+      - backup
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: "0.25"
 
   # ── Monitoring Stack (--profile monitoring) ──────────────────────────────
   # prometheus, grafana, alertmanager, node-exporter, loki added in Task 5

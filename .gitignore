@@ -33,3 +33,6 @@ Thumbs.db
 # Claude Code / Superpowers internal files
 .claude/
 .superpowers/
+
+# Backup files
+backups/*.sql.gz
