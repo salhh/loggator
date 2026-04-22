@@ -35,7 +35,7 @@ export default async function StatsPage({
     );
   }
 
-  const maxErrors = Math.max(...stats.top_services.map((s) => s.error_count), 1);
+  const maxErrors = stats.top_services.reduce((m, s) => Math.max(m, s.error_count), 1);
 
   return (
     <div className="space-y-6">

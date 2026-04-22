@@ -72,6 +72,7 @@ function CheckCard({ name, check }: { name: string; check: HealthCheck }) {
 export default function HealthClient() {
   const [data, setData] = useState<HealthResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [lastChecked, setLastChecked] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -79,10 +80,11 @@ export default function HealthClient() {
   const fetchHealth = useCallback(async () => {
     try {
       const res = await api.health();
+      setFetchError(false);
       setData(res);
       setLastChecked(Date.now());
     } catch {
-      // keep stale data on error
+      if (!data) setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -144,6 +146,12 @@ export default function HealthClient() {
           {loading ? "Checking…" : "Refresh"}
         </button>
       </div>
+
+      {fetchError && !data && (
+        <div className="bg-card border border-border rounded-lg p-8 text-center">
+          <p className="text-sm text-muted-foreground">Could not reach the API — is it running?</p>
+        </div>
+      )}
 
       {/* Cards — skeleton while loading before first data */}
       {loading && !data ? (
