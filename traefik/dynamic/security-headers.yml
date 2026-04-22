@@ -1,0 +1,17 @@
+http:
+  middlewares:
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        forceSTSHeader: true
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=()"
+
+    dashboard-auth:
+      basicAuth:
+        users:
+          - "{{ env \"TRAEFIK_DASHBOARD_USER\" }}:{{ env \"TRAEFIK_DASHBOARD_PASSWORD\" }}"
