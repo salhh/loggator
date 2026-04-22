@@ -9,6 +9,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
+from prometheus_fastapi_instrumentator import Instrumentator
+
 from loggator.config import settings
 
 # Initialize Sentry (no-op if SENTRY_DSN is empty)
@@ -53,6 +55,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Loggator API", version="0.1.0", lifespan=lifespan)
+
+# Expose /metrics endpoint for Prometheus scraping
+Instrumentator().instrument(app).expose(app)
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 

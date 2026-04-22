@@ -31,6 +31,12 @@ services:
       - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.routers.traefik-dashboard.service=api@internal"
       - "traefik.http.routers.traefik-dashboard.middlewares=dashboard-auth@file,security-headers@file"
+    # logging: driver: loki  # Uncomment after installing: docker plugin install grafana/loki-docker-driver
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -50,6 +56,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    # logging: driver: loki  # Uncomment after installing: docker plugin install grafana/loki-docker-driver
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -115,6 +127,12 @@ services:
       timeout: 10s
       retries: 15
     restart: unless-stopped
+    # logging: driver: loki  # Uncomment after installing: docker plugin install grafana/loki-docker-driver
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -132,6 +150,12 @@ services:
       opensearch:
         condition: service_healthy
     restart: unless-stopped
+    # logging: driver: loki  # Uncomment after installing: docker plugin install grafana/loki-docker-driver
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -173,6 +197,12 @@ services:
       - "traefik.http.routers.api.middlewares=security-headers@file,websocket-headers"
       - "traefik.http.services.api.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.websocket-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+    # logging: driver: loki  # Uncomment after installing: docker plugin install grafana/loki-docker-driver
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -198,6 +228,12 @@ services:
       - "traefik.http.routers.web.tls.certresolver=letsencrypt"
       - "traefik.http.routers.web.middlewares=security-headers@file"
       - "traefik.http.services.web.loadbalancer.server.port=3000"
+    # logging: driver: loki  # Uncomment after installing: docker plugin install grafana/loki-docker-driver
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -228,9 +264,132 @@ services:
           cpus: "0.25"
 
   # ── Monitoring Stack (--profile monitoring) ──────────────────────────────
-  # prometheus, grafana, alertmanager, node-exporter, loki added in Task 5
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus-rules.yml:/etc/prometheus/rules/loggator.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://${DOMAIN}/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`${DOMAIN}`) && PathPrefix(`/grafana`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.grafana.middlewares=security-headers@file"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.25"
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: "0.1"
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.0
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: "0.1"
+
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter
+    restart: unless-stopped
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+          cpus: "0.1"
 
 volumes:
   postgres_data:
   opensearch_data:
   traefik_certs:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+  loki_data:
