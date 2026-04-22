@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class UserClaims(BaseModel):
@@ -12,10 +12,8 @@ class UserClaims(BaseModel):
 
     Fields will be populated once the IAM integration is implemented.
     """
+    model_config = ConfigDict(extra="allow")
+
     user_id: str = Field(..., description="Unique user identifier from IAM")
     email: str = Field(..., description="User's email address")
     roles: list[str] = Field(default_factory=list, description="User's assigned roles")
-
-    class Config:
-        # Allow extra fields from IAM token claims
-        extra = "allow"

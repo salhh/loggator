@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import Request
+from fastapi import Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from loggator.auth.schemas import UserClaims
@@ -25,7 +25,7 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 
 async def require_auth(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = None,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
 ) -> Optional[UserClaims]:
     """
     FastAPI dependency that validates the request's Bearer token.
