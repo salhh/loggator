@@ -14,4 +14,4 @@ http:
     dashboard-auth:
       basicAuth:
         users:
-          - "{{ env \"TRAEFIK_DASHBOARD_USER\" }}:{{ env \"TRAEFIK_DASHBOARD_PASSWORD\" }}"
+          - "{{ env \"TRAEFIK_DASHBOARD_USER\" }}:{{ env \"TRAEFIK_DASHBOARD_HTPASSWD\" }}"
