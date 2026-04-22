@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     # Observability
     sentry_dsn: str = ""
     sentry_traces_sample_rate: float = 0.2
+    sentry_environment: str = "production"
 
 
 settings = Settings()

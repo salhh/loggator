@@ -77,7 +77,7 @@ services:
       - OPENSEARCH_HOSTS=["https://opensearch:9200"]
       - OPENSEARCH_USERNAME=admin
       - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
-      - OPENSEARCH_SSL_VERIFICATIONMODE=none
+      - OPENSEARCH_SSL_VERIFICATIONMODE=none  # default self-signed cert; use CA path if deploying custom certs
     depends_on:
       opensearch:
         condition: service_healthy
@@ -98,6 +98,9 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-loggator}:${POSTGRES_PASSWORD:-loggator}@postgres:5432/${POSTGRES_DB:-loggator}
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
+      - OPENSEARCH_AUTH_TYPE=${OPENSEARCH_AUTH_TYPE}
+      - OPENSEARCH_USE_SSL=${OPENSEARCH_USE_SSL}
+      - OPENSEARCH_VERIFY_CERTS=${OPENSEARCH_VERIFY_CERTS}
       - ENV_FILE_PATH=/app/.env.prod
     volumes:
       - ./.env.prod:/app/.env.prod
