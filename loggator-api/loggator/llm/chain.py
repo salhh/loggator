@@ -84,7 +84,8 @@ class LLMChain:
             except Exception as exc:
                 log.error("llm.ainvoke.failed", provider=settings.llm_provider, error=str(exc))
                 raise
-            return result.content
+            content = result.content
+        return content if isinstance(content, str) else str(content)
 
 
 llm_chain = LLMChain()

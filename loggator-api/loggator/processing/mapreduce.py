@@ -37,7 +37,7 @@ async def summarize_chunks(
 ) -> dict:
     """
     Map-reduce summarization:
-    1. Map: send each chunk to Ollama with SUMMARY_MAP_PROMPT in parallel
+    1. Map: send each chunk through the LLM chain (summary_map) in parallel
     2. Reduce: merge all partial summaries into one final report
     Returns the final summary dict.
     """

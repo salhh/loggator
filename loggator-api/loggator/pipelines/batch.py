@@ -73,7 +73,7 @@ async def run_batch(
         top_issues=result.get("top_issues", []),
         error_count=int(result.get("error_count", 0)),
         recommendation=result.get("recommendation"),
-        model_used=settings.llm_provider,
+        model_used={"anthropic": settings.anthropic_model, "openai": settings.openai_model}.get(settings.llm_provider, settings.ollama_model),
         tokens_used=None,
     )
 

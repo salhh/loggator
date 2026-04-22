@@ -47,9 +47,9 @@ async def _process_batch(docs: list[dict], index_pattern: str, session) -> list[
             severity=severity,
             summary=summary,
             root_cause_hints=hints,
-            mitre_tactics=result.get("mitre_tactics", []),  # TODO(Task 4): DB column added by migration
+            mitre_tactics=result.get("mitre_tactics", []),
             raw_logs=[{"text": doc.get("message", "")} for doc in docs[:5]],
-            model_used=settings.llm_provider,
+            model_used={"anthropic": settings.anthropic_model, "openai": settings.openai_model}.get(settings.llm_provider, settings.ollama_model),
         )
         anomaly = await repo.save(anomaly)
         saved.append(anomaly)
