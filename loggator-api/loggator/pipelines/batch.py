@@ -6,7 +6,6 @@ from loggator.config import settings
 from loggator.db.models import Summary
 from loggator.db.session import AsyncSessionLocal
 from loggator.db.repository import SummaryRepository
-from loggator.ollama.client import OllamaClient
 from loggator.opensearch.client import get_client
 from loggator.opensearch.queries import range_query_logs
 from loggator.processing.preprocessor import preprocess
@@ -56,10 +55,9 @@ async def run_batch(
     chunks = chunk_docs(clean_docs)
     log.info("batch.chunked", chunks=len(chunks))
 
-    # ── 4. Map-reduce summarize via Ollama ────────────────────────────────────
-    ollama = OllamaClient()
+    # ── 4. Map-reduce summarize via LLM chain ─────────────────────────────────
     try:
-        result = await summarize_chunks(chunks, ollama)
+        result = await summarize_chunks(chunks)
     except Exception as exc:
         log.error("batch.ollama.failed", error=str(exc))
         return None
@@ -75,7 +73,7 @@ async def run_batch(
         top_issues=result.get("top_issues", []),
         error_count=int(result.get("error_count", 0)),
         recommendation=result.get("recommendation"),
-        model_used=settings.ollama_model,
+        model_used=settings.llm_provider,
         tokens_used=None,
     )
 

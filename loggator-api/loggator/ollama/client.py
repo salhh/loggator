@@ -1,3 +1,5 @@
+# DEPRECATED: This client is kept only for embedding calls (nomic-embed-text via Ollama).
+# LLM inference has moved to loggator.llm.chain. Do not use OllamaClient for new analysis work.
 import asyncio
 import json
 from typing import Any

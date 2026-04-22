@@ -2,15 +2,13 @@ import asyncio
 import json
 import structlog
 
-from loggator.ollama.client import OllamaClient
-from loggator.ollama.prompts import ANOMALY_PROMPT, SUMMARY_MAP_PROMPT, SUMMARY_REDUCE_PROMPT
+from loggator.llm.chain import llm_chain
 
 log = structlog.get_logger()
 
 
 async def analyze_chunks_for_anomalies(
     chunks: list[str],
-    client: OllamaClient,
 ) -> list[dict]:
     """
     Map each chunk through the anomaly prompt in parallel.
@@ -18,7 +16,7 @@ async def analyze_chunks_for_anomalies(
     """
     async def _analyze_one(chunk: str, idx: int) -> dict:
         log.info("anomaly.map.chunk", idx=idx, lines=chunk.count("\n") + 1)
-        result = await client.generate(ANOMALY_PROMPT, chunk)
+        result = await llm_chain.generate("anomaly", chunk)
         return result
 
     tasks = [_analyze_one(chunk, i) for i, chunk in enumerate(chunks)]
@@ -36,7 +34,6 @@ async def analyze_chunks_for_anomalies(
 
 async def summarize_chunks(
     chunks: list[str],
-    client: OllamaClient,
 ) -> dict:
     """
     Map-reduce summarization:
@@ -52,7 +49,7 @@ async def summarize_chunks(
 
     async def _map_one(chunk: str, idx: int) -> dict:
         log.info("summarize.map.chunk", idx=idx)
-        return await client.generate(SUMMARY_MAP_PROMPT, chunk)
+        return await llm_chain.generate("summary_map", chunk)
 
     map_tasks = [_map_one(chunk, i) for i, chunk in enumerate(chunks)]
     map_results = await asyncio.gather(*map_tasks, return_exceptions=True)
@@ -75,7 +72,7 @@ async def summarize_chunks(
 
     reduce_input = json.dumps(partial_summaries, indent=2)
     log.info("summarize.reduce.start")
-    final = await client.generate(SUMMARY_REDUCE_PROMPT, reduce_input)
+    final = await llm_chain.generate("summary_reduce", reduce_input)
 
     # Ensure error_count is the sum from map step (more accurate than Ollama's guess)
     final["error_count"] = total_errors

@@ -11,7 +11,6 @@ from loggator.opensearch.queries import search_after_logs
 from loggator.processing.preprocessor import preprocess
 from loggator.processing.chunker import chunk_docs
 from loggator.processing.mapreduce import analyze_chunks_for_anomalies
-from loggator.ollama.client import OllamaClient
 from loggator.alerts.dispatcher import dispatch
 
 log = structlog.get_logger()
@@ -27,8 +26,7 @@ async def _process_batch(docs: list[dict], index_pattern: str, session) -> list[
         return []
 
     chunks = chunk_docs(docs, max_tokens=settings.chunk_max_tokens)
-    client = OllamaClient()
-    raw_results = await analyze_chunks_for_anomalies(chunks, client)
+    raw_results = await analyze_chunks_for_anomalies(chunks)
 
     saved: list[Anomaly] = []
     repo = AnomalyRepository(session)
@@ -49,8 +47,9 @@ async def _process_batch(docs: list[dict], index_pattern: str, session) -> list[
             severity=severity,
             summary=summary,
             root_cause_hints=hints,
+            mitre_tactics=result.get("mitre_tactics", []),
             raw_logs=[{"text": doc.get("message", "")} for doc in docs[:5]],
-            model_used=settings.ollama_model,
+            model_used=settings.llm_provider,
         )
         anomaly = await repo.save(anomaly)
         saved.append(anomaly)
