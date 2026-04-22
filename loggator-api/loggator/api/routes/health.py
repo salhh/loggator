@@ -79,7 +79,7 @@ async def _check_llm() -> CheckResult:
                 r = await client.get(f"{settings.ollama_base_url}/api/tags")
                 r.raise_for_status()
 
-        await asyncio.wait_for(_query(), timeout=_TIMEOUT + 0.5)
+        await asyncio.wait_for(_query(), timeout=_TIMEOUT)
         return CheckResult(
             ok=True,
             latency_ms=int((time.monotonic() - t0) * 1000),
