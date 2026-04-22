@@ -23,15 +23,27 @@ class LLMChain:
     def __init__(self) -> None:
         provider = settings.llm_provider
         if provider == "anthropic":
+            key = settings.anthropic_api_key.get_secret_value()
+            if not key:
+                raise ValueError(
+                    "LLM_PROVIDER is 'anthropic' but ANTHROPIC_API_KEY is not set. "
+                    "Set the key or change LLM_PROVIDER to 'ollama'."
+                )
             self._model = ChatAnthropic(
                 model=settings.anthropic_model,
-                api_key=settings.anthropic_api_key.get_secret_value(),
+                api_key=key,
                 timeout=settings.llm_timeout,
             )
         elif provider == "openai":
+            key = settings.openai_api_key.get_secret_value()
+            if not key:
+                raise ValueError(
+                    "LLM_PROVIDER is 'openai' but OPENAI_API_KEY is not set. "
+                    "Set the key or change LLM_PROVIDER to 'ollama'."
+                )
             self._model = ChatOpenAI(
                 model=settings.openai_model,
-                api_key=settings.openai_api_key.get_secret_value(),
+                api_key=key,
                 base_url=settings.openai_base_url or None,
                 timeout=settings.llm_timeout,
             )
@@ -47,11 +59,18 @@ class LLMChain:
         Run one LLM inference with structured output validation.
         prompt_type: 'anomaly' | 'summary_map' | 'summary_reduce'
         """
+        if prompt_type not in _PROMPT_MAP:
+            raise ValueError(f"Unknown prompt_type {prompt_type!r}. Valid: {list(_PROMPT_MAP)}")
         prompt, schema = _PROMPT_MAP[prompt_type]
         chain = prompt | self._model.with_structured_output(schema).with_retry(stop_after_attempt=3)
         async with self._semaphore:
             log.debug("llm.generate", provider=settings.llm_provider, prompt_type=prompt_type)
-            result = await chain.ainvoke({"logs": user_content})
+            try:
+                result = await chain.ainvoke({"logs": user_content})
+            except Exception as exc:
+                log.error("llm.generate.failed", provider=settings.llm_provider,
+                          prompt_type=prompt_type, error=str(exc))
+                raise
             return result.model_dump()
 
 
