@@ -13,6 +13,9 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from loggator.config import settings
 
+# Auth module — IAM integration placeholder
+from loggator.auth import dependencies as _auth  # noqa: F401 — imported for startup validation
+
 # Initialize Sentry (no-op if SENTRY_DSN is empty)
 if settings.sentry_dsn:
     sentry_sdk.init(
