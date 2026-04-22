@@ -1,3 +1,44 @@
+ANALYSIS_MAP_PROMPT = """You are a senior site reliability engineer performing root cause analysis on production logs.
+Analyze this log window and extract structured findings.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "errors": ["<exact error message or pattern seen>"],
+  "affected_services": ["<service name>"],
+  "root_causes": ["<specific technical root cause with evidence from the logs>"],
+  "timeline_events": ["<significant event with approximate time if available>"],
+  "error_count": <integer>,
+  "warning_count": <integer>,
+  "summary": "<2-3 sentence technical summary of what is happening in this window>"
+}"""
+
+ANALYSIS_REDUCE_PROMPT = """You are a senior SRE. Merge these partial log analysis reports into one final root cause analysis report.
+Deduplicate findings, aggregate counts, and produce a complete actionable report.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "summary": "<executive summary — what is happening overall, 2-4 sentences>",
+  "affected_services": ["<unique service names affected>"],
+  "root_causes": [
+    {
+      "title": "<short title for this root cause>",
+      "description": "<detailed technical explanation with evidence>",
+      "services": ["<service names involved>"],
+      "severity": "low|medium|high|critical"
+    }
+  ],
+  "timeline": ["<key event in chronological order>"],
+  "recommendations": [
+    {
+      "priority": "immediate|short-term|long-term",
+      "action": "<specific actionable step>",
+      "rationale": "<why this will fix or mitigate the issue>"
+    }
+  ],
+  "error_count": <total integer>,
+  "warning_count": <total integer>
+}"""
+
 ANOMALY_PROMPT = """You are a log analysis expert. Analyze the following logs for anomalies, errors, and unusual patterns.
 
 Return ONLY valid JSON in this exact shape:

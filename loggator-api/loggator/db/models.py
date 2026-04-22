@@ -83,3 +83,24 @@ class Checkpoint(Base):
     last_sort = Column(JSONB, nullable=True)  # search_after cursor value
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ScheduledAnalysis(Base):
+    __tablename__ = "scheduled_analyses"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    window_start = Column(DateTime(timezone=True), nullable=False)
+    window_end = Column(DateTime(timezone=True), nullable=False)
+    index_pattern = Column(Text, nullable=False)
+    summary = Column(Text, nullable=False)
+    affected_services = Column(JSONB, nullable=False, default=list)
+    root_causes = Column(JSONB, nullable=False, default=list)
+    timeline = Column(JSONB, nullable=False, default=list)
+    recommendations = Column(JSONB, nullable=False, default=list)
+    error_count = Column(Integer, nullable=False, default=0)
+    warning_count = Column(Integer, nullable=False, default=0)
+    log_count = Column(Integer, nullable=False, default=0)
+    chunk_count = Column(Integer, nullable=False, default=0)
+    model_used = Column(String(100), nullable=False)
+    status = Column(String(20), nullable=False, default="success")  # "success" | "failed"

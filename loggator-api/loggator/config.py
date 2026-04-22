@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     # Pipeline
     batch_interval_minutes: int = 15
     batch_window_minutes: int = 15
+
+    # Scheduled RCA analysis
+    analysis_interval_minutes: int = 60
+    analysis_window_minutes: int = 60
+    analysis_enabled: bool = True
     streaming_poll_interval_seconds: int = 10
     streaming_batch_size: int = 500
     chunk_max_tokens: int = 3000
@@ -44,6 +49,11 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: str = ""
     alert_from_email: str = ""
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    alert_email_to: str = ""
+    alert_webhook_url: str = ""
+    alert_cooldown_minutes: int = 5
 
     # API
     api_host: str = "0.0.0.0"

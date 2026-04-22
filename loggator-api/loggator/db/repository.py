@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from loggator.db.models import Alert, Anomaly, Checkpoint, Summary
+from loggator.db.models import Alert, Anomaly, Checkpoint, Summary, ScheduledAnalysis
 
 
 class SummaryRepository:
@@ -97,8 +97,11 @@ class AlertRepository:
         await self.session.refresh(alert)
         return alert
 
-    async def list(self, limit: int = 50, offset: int = 0) -> list[Alert]:
-        q = select(Alert).order_by(Alert.created_at.desc()).limit(limit).offset(offset)
+    async def list(self, limit: int = 50, offset: int = 0, channel: str | None = None) -> list[Alert]:
+        q = select(Alert).order_by(Alert.created_at.desc())
+        if channel:
+            q = q.where(Alert.channel == channel)
+        q = q.limit(limit).offset(offset)
         result = await self.session.execute(q)
         return list(result.scalars().all())
 
@@ -133,3 +136,64 @@ class CheckpointRepository:
             )
             self.session.add(checkpoint)
             await self.session.commit()
+
+
+class ScheduledAnalysisRepository:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def save(self, record: ScheduledAnalysis) -> ScheduledAnalysis:
+        self.session.add(record)
+        await self.session.commit()
+        await self.session.refresh(record)
+        return record
+
+    async def list(
+        self,
+        from_ts: Optional[datetime] = None,
+        to_ts: Optional[datetime] = None,
+        index_pattern: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ScheduledAnalysis]:
+        q = select(ScheduledAnalysis).order_by(ScheduledAnalysis.created_at.desc())
+        if from_ts:
+            q = q.where(ScheduledAnalysis.created_at >= from_ts)
+        if to_ts:
+            q = q.where(ScheduledAnalysis.created_at <= to_ts)
+        if index_pattern:
+            q = q.where(ScheduledAnalysis.index_pattern == index_pattern)
+        result = await self.session.execute(q.limit(limit).offset(offset))
+        return list(result.scalars().all())
+
+    async def get(self, id: UUID) -> Optional[ScheduledAnalysis]:
+        result = await self.session.execute(
+            select(ScheduledAnalysis).where(ScheduledAnalysis.id == id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_latest(self) -> Optional[ScheduledAnalysis]:
+        result = await self.session.execute(
+            select(ScheduledAnalysis).order_by(ScheduledAnalysis.created_at.desc()).limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def find_by_window(
+        self,
+        from_ts: datetime,
+        to_ts: datetime,
+        tolerance_minutes: int = 2,
+    ) -> Optional[ScheduledAnalysis]:
+        """Return an existing record covering this window (used for deduplication)."""
+        from datetime import timedelta
+        tol = timedelta(minutes=tolerance_minutes)
+        result = await self.session.execute(
+            select(ScheduledAnalysis)
+            .where(
+                ScheduledAnalysis.window_start >= from_ts - tol,
+                ScheduledAnalysis.window_end <= to_ts + tol,
+            )
+            .order_by(ScheduledAnalysis.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()

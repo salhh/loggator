@@ -54,6 +54,9 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-loggator}:${POSTGRES_PASSWORD:-loggator}@postgres:5432/${POSTGRES_DB:-loggator}
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
+      - ENV_FILE_PATH=/app/.env
+    volumes:
+      - ./.env:/app/.env
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +76,7 @@ services:
     ports:
       - "3000:3000"
     environment:
+      - API_URL=http://api:8000/api/v1
       - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
       - NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws/live
     depends_on:

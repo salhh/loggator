@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 router = APIRouter(tags=["settings"])
 
-_ENV_PATH = Path(__file__).parent.parent.parent.parent / ".env.dev"
+_ENV_PATH = Path(os.environ.get("ENV_FILE_PATH", Path(__file__).parent.parent.parent.parent / ".env"))
 _SECRET_KEYS = {"DATABASE_URL", "OPENSEARCH_PASSWORD", "OPENSEARCH_API_KEY", "SLACK_WEBHOOK_URL", "SMTP_PASSWORD"}
 
 
@@ -69,6 +69,24 @@ async def update_settings(body: SettingsIn):
             lines.append(f"{key}={new_value}")
 
     _ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    # Update the in-memory settings singleton so changes take effect immediately.
+    # Write directly into __dict__ to bypass Pydantic v2's descriptor layer.
+    from loggator.config import settings as _settings
+    for key, new_value in body.updates.items():
+        field_name = key.lower()
+        if field_name in _settings.model_fields:
+            field = _settings.model_fields[field_name]
+            try:
+                if field.annotation is int:
+                    coerced = int(new_value)
+                elif field.annotation is bool:
+                    coerced = new_value.lower() in ("true", "1", "yes")
+                else:
+                    coerced = new_value
+                _settings.__dict__[field_name] = coerced
+            except Exception:
+                pass  # best-effort; file write already succeeded
 
     parsed = _parse_env("\n".join(lines))
     masked = {k: _mask(k, v) for k, v in parsed.items()}

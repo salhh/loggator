@@ -1,7 +1,7 @@
-import json
 import structlog
 import httpx
-from uuid import UUID
+from dataclasses import dataclass, field as dc_field
+from datetime import datetime, timedelta
 
 from loggator.config import settings
 from loggator.db.models import Alert, Anomaly
@@ -11,12 +11,25 @@ log = structlog.get_logger()
 _SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2}
 _THRESHOLD = _SEVERITY_ORDER.get(settings.alert_severity_threshold, 1)
 
+# In-memory cooldown cache keyed by "{index_pattern}:{severity}"
+_cooldown_cache: dict[str, datetime] = {}
+
 
 def _meets_threshold(severity: str) -> bool:
     return _SEVERITY_ORDER.get(severity, 0) >= _THRESHOLD
 
 
-def _build_payload(anomaly: Anomaly) -> dict:
+def _is_cooling_down(index_pattern: str, severity: str) -> bool:
+    key = f"{index_pattern}:{severity}"
+    last = _cooldown_cache.get(key)
+    return last is not None and datetime.utcnow() - last < timedelta(minutes=settings.alert_cooldown_minutes)
+
+
+def _record_sent(index_pattern: str, severity: str) -> None:
+    _cooldown_cache[f"{index_pattern}:{severity}"] = datetime.utcnow()
+
+
+def _build_payload(anomaly) -> dict:
     return {
         "anomaly_id": str(anomaly.id),
         "severity": anomaly.severity,
@@ -27,10 +40,9 @@ def _build_payload(anomaly: Anomaly) -> dict:
     }
 
 
-async def _send_slack(anomaly: Anomaly) -> tuple[bool, str]:
+async def _send_slack(anomaly) -> tuple[bool, str]:
     if not settings.slack_webhook_url:
         return False, "SLACK_WEBHOOK_URL not configured"
-    payload = _build_payload(anomaly)
     severity_emoji = {"low": ":information_source:", "medium": ":warning:", "high": ":rotating_light:"}.get(
         anomaly.severity, ":warning:"
     )
@@ -47,7 +59,7 @@ async def _send_slack(anomaly: Anomaly) -> tuple[bool, str]:
             {
                 "type": "section",
                 "fields": [
-                    {"type": "mrkdwn", "text": f"*Root cause hints:*\n" + "\n".join(f"• {h}" for h in anomaly.root_cause_hints[:3])},
+                    {"type": "mrkdwn", "text": "*Root cause hints:*\n" + "\n".join(f"• {h}" for h in anomaly.root_cause_hints[:3])},
                     {"type": "mrkdwn", "text": f"*Detected at:*\n{anomaly.detected_at.isoformat()}"},
                 ],
             },
@@ -59,7 +71,7 @@ async def _send_slack(anomaly: Anomaly) -> tuple[bool, str]:
     return True, ""
 
 
-async def _send_webhook(anomaly: Anomaly, url: str) -> tuple[bool, str]:
+async def _send_webhook(anomaly, url: str) -> tuple[bool, str]:
     payload = _build_payload(anomaly)
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(url, json=payload)
@@ -67,7 +79,7 @@ async def _send_webhook(anomaly: Anomaly, url: str) -> tuple[bool, str]:
     return True, ""
 
 
-async def _send_email(anomaly: Anomaly, to_addr: str) -> tuple[bool, str]:
+async def _send_email(anomaly, to_addr: str) -> tuple[bool, str]:
     if not settings.smtp_host:
         return False, "SMTP_HOST not configured"
     try:
@@ -100,13 +112,38 @@ async def _send_email(anomaly: Anomaly, to_addr: str) -> tuple[bool, str]:
         return False, str(exc)
 
 
+async def _send_telegram(anomaly) -> tuple[bool, str]:
+    if not settings.telegram_bot_token or not settings.telegram_chat_id:
+        return False, "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not configured"
+    icon = {"low": "\u2139\ufe0f", "medium": "\u26a0\ufe0f", "high": "\U0001f6a8"}.get(anomaly.severity, "\u26a0\ufe0f")
+    hints = "\n".join(f"  \u2022 {h}" for h in anomaly.root_cause_hints[:3])
+    text = (
+        f"{icon} Loggator Alert \u2014 {anomaly.severity.upper()}\n"
+        f"Index: {anomaly.index_pattern}\n"
+        f"{anomaly.summary}\n\n"
+        f"Root cause hints:\n{hints}\n"
+        f"Detected: {anomaly.detected_at.isoformat()}"
+    )
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(url, json={"chat_id": settings.telegram_chat_id, "text": text})
+        resp.raise_for_status()
+    return True, ""
+
+
 async def dispatch(anomaly: Anomaly, session) -> list[Alert]:
-    """
-    Dispatch alerts for an anomaly if it meets the severity threshold.
-    Returns list of Alert rows created.
-    """
+    """Dispatch alerts for an anomaly if it meets the severity threshold."""
     if not _meets_threshold(anomaly.severity):
         log.debug("dispatcher.below_threshold", severity=anomaly.severity, threshold=settings.alert_severity_threshold)
+        return []
+
+    if _is_cooling_down(anomaly.index_pattern, anomaly.severity):
+        log.info(
+            "dispatcher.cooldown",
+            index_pattern=anomaly.index_pattern,
+            severity=anomaly.severity,
+            cooldown_minutes=settings.alert_cooldown_minutes,
+        )
         return []
 
     alerts_created: list[Alert] = []
@@ -132,14 +169,76 @@ async def dispatch(anomaly: Anomaly, session) -> list[Alert]:
             ok, err = await _send_slack(anomaly)
         except Exception as exc:
             ok, err = False, str(exc)
-        alert = await _record("slack", settings.slack_webhook_url[:40], ok, err)
-        alerts_created.append(alert)
+        alerts_created.append(await _record("slack", settings.slack_webhook_url[:40], ok, err))
         log.info("dispatcher.slack", ok=ok, anomaly_id=str(anomaly.id))
 
+    # Email
+    if settings.smtp_host and settings.alert_email_to:
+        for addr in [a.strip() for a in settings.alert_email_to.split(",") if a.strip()]:
+            try:
+                ok, err = await _send_email(anomaly, addr)
+            except Exception as exc:
+                ok, err = False, str(exc)
+            alerts_created.append(await _record("email", addr, ok, err))
+            log.info("dispatcher.email", ok=ok, to=addr, anomaly_id=str(anomaly.id))
+
+    # Telegram
+    if settings.telegram_bot_token and settings.telegram_chat_id:
+        try:
+            ok, err = await _send_telegram(anomaly)
+        except Exception as exc:
+            ok, err = False, str(exc)
+        alerts_created.append(await _record("telegram", f"tg:{settings.telegram_chat_id}", ok, err))
+        log.info("dispatcher.telegram", ok=ok, anomaly_id=str(anomaly.id))
+
+    # Webhook
+    if settings.alert_webhook_url:
+        try:
+            ok, err = await _send_webhook(anomaly, settings.alert_webhook_url)
+        except Exception as exc:
+            ok, err = False, str(exc)
+        alerts_created.append(await _record("webhook", settings.alert_webhook_url[:40], ok, err))
+        log.info("dispatcher.webhook", ok=ok, anomaly_id=str(anomaly.id))
+
     if alerts_created:
-        # mark anomaly as alerted after first successful dispatch
+        _record_sent(anomaly.index_pattern, anomaly.severity)
         if any(a.status == "sent" for a in alerts_created):
             anomaly.alerted = True
             await session.commit()
 
     return alerts_created
+
+
+# ── Test dispatch (bypasses cooldown, DB, threshold) ─────────────────────────
+
+@dataclass
+class _FakeAnomaly:
+    """Minimal stand-in for Anomaly used only in test dispatches."""
+    id: str = "00000000-0000-0000-0000-000000000000"
+    severity: str = "high"
+    summary: str = "This is a test alert from Loggator."
+    root_cause_hints: list = dc_field(default_factory=lambda: ["Test hint 1", "Test hint 2"])
+    index_pattern: str = "test-*"
+    detected_at: object = None
+
+    def __post_init__(self):
+        if self.detected_at is None:
+            self.detected_at = datetime.utcnow()
+
+
+async def dispatch_test(channel: str) -> tuple[bool, str]:
+    """Send a single test alert on the given channel. No DB writes, no cooldown."""
+    a = _FakeAnomaly()
+    if channel == "slack":
+        return await _send_slack(a)
+    elif channel == "email":
+        if not settings.alert_email_to:
+            return False, "ALERT_EMAIL_TO not configured"
+        return await _send_email(a, settings.alert_email_to.split(",")[0].strip())
+    elif channel == "telegram":
+        return await _send_telegram(a)
+    elif channel == "webhook":
+        if not settings.alert_webhook_url:
+            return False, "ALERT_WEBHOOK_URL not configured"
+        return await _send_webhook(a, settings.alert_webhook_url)
+    raise ValueError(f"Unknown channel: {channel!r}")

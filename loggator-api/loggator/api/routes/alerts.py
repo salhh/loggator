@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
@@ -25,6 +25,11 @@ class AlertOut(BaseModel):
         from_attributes = True
 
 
+class TestAlertOut(BaseModel):
+    ok: bool
+    error: Optional[str] = None
+
+
 class WebhookIn(BaseModel):
     url: str
     channel: str = "webhook"
@@ -34,15 +39,26 @@ class WebhookIn(BaseModel):
 async def list_alerts(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    channel: Optional[str] = Query(None, description="Filter by channel: slack, email, telegram, webhook"),
     session: AsyncSession = Depends(get_session),
 ):
-    repo = AlertRepository(session)
-    return await repo.list(limit=limit, offset=offset)
+    return await AlertRepository(session).list(limit=limit, offset=offset, channel=channel)
+
+
+@router.post("/alerts/test", response_model=TestAlertOut)
+async def test_alert(
+    channel: Literal["slack", "email", "telegram", "webhook"] = Query(..., description="Channel to test"),
+):
+    from loggator.alerts.dispatcher import dispatch_test
+    try:
+        ok, error = await dispatch_test(channel)
+        return TestAlertOut(ok=ok, error=error if not ok else None)
+    except Exception as exc:
+        return TestAlertOut(ok=False, error=str(exc))
 
 
 @router.post("/webhooks", status_code=201)
 async def register_webhook(body: WebhookIn):
-    # Stored in config/env for now; a full webhook registry table can be added later
     return {"message": "Webhook registered", "url": body.url, "channel": body.channel}
 
 
