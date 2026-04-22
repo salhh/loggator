@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     ollama_concurrency: int = 3
     ollama_timeout: int = 120
 
+    # LLM provider abstraction
+    llm_provider: Literal["ollama", "anthropic", "openai"] = "ollama"
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-4-6"
+    openai_api_key: str = ""
+    openai_base_url: str = ""   # optional, for OpenAI-compatible endpoints
+    openai_model: str = "gpt-4o-mini"
+    llm_concurrency: int = 3
+    llm_timeout: int = 120
+
     # Pipeline
     batch_interval_minutes: int = 15
     batch_window_minutes: int = 15
