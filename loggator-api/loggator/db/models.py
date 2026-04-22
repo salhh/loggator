@@ -37,7 +37,7 @@ class Anomaly(Base):
     severity = Column(String(10), nullable=False)  # low | medium | high
     summary = Column(Text, nullable=False)
     root_cause_hints = Column(JSONB, nullable=False, default=list)
-    mitre_tactics = Column(JSONB, nullable=False, server_default="[]")
+    mitre_tactics = Column(JSONB, nullable=False, default=list, server_default="[]")
     raw_logs = Column(JSONB, nullable=True)
     model_used = Column(String(100), nullable=False)
     alerted = Column(Boolean, nullable=False, default=False)
