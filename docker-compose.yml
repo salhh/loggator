@@ -38,6 +38,7 @@ services:
       interval: 10s
       timeout: 10s
       retries: 15
+    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -54,6 +55,7 @@ services:
     depends_on:
       opensearch:
         condition: service_healthy
+    restart: unless-stopped
     deploy:
       resources:
         limits:
