@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.config import settings
 from loggator.db.session import get_session
+from loggator.opensearch.client import get_client
 
 router = APIRouter(tags=["stats"])
 log = structlog.get_logger()
@@ -131,11 +132,10 @@ async def get_stats(
         {"s": since},
     )
     sev_map: dict[str, int] = {row[0]: row[1] for row in r.fetchall()}
-    anomalies_by_severity = {
-        "low": sev_map.get("low", 0),
-        "medium": sev_map.get("medium", 0),
-        "high": sev_map.get("high", 0),
-    }
+    anomalies_by_severity: dict[str, int] = {**sev_map}
+    anomalies_by_severity.setdefault("low", 0)
+    anomalies_by_severity.setdefault("medium", 0)
+    anomalies_by_severity.setdefault("high", 0)
 
     # ── Alerts by channel ──────────────────────────────────────────────────────
     r = await session.execute(
@@ -151,15 +151,13 @@ async def get_stats(
     top_services: list[TopService] = []
 
     try:
-        from loggator.opensearch.client import get_client
-
         os_client = get_client()
 
         vol_resp = await os_client.search(
             index=settings.opensearch_index_pattern,
             body={
                 "size": 0,
-                "query": {"range": {"@timestamp": {"gte": since.isoformat()}}},
+                "query": {"range": {"@timestamp": {"gte": since.strftime("%Y-%m-%dT%H:%M:%SZ")}}},
                 "aggs": {
                     "by_day": {
                         "date_histogram": {
@@ -190,6 +188,13 @@ async def get_stats(
                 )
             )
 
+        # Align log_volume to the same date range as `daily` (zero-fill missing days)
+        lv_by_date = {b.date: b for b in log_volume}
+        log_volume = []
+        for i in range(days):
+            d = (datetime.now(timezone.utc) - timedelta(days=days - 1 - i)).date().isoformat()
+            log_volume.append(lv_by_date.get(d, LogVolumeBucket(date=d, error=0, warn=0, info=0)))
+
         svc_resp = await os_client.search(
             index=settings.opensearch_index_pattern,
             body={
@@ -197,7 +202,7 @@ async def get_stats(
                 "query": {
                     "bool": {
                         "must": [
-                            {"range": {"@timestamp": {"gte": since.isoformat()}}},
+                            {"range": {"@timestamp": {"gte": since.strftime("%Y-%m-%dT%H:%M:%SZ")}}},
                             {"term": {"level.keyword": "ERROR"}},
                         ]
                     }
