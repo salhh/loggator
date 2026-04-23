@@ -128,7 +128,7 @@ class AuditLog(Base):
     request_id = Column(Text, nullable=False)
     method = Column(Text, nullable=False)
     path = Column(Text, nullable=False)
-    status_code = Column(Integer, nullable=True)
+    status_code = Column(Integer, nullable=True)  # None if request crashed before response
     duration_ms = Column(Integer, nullable=True)
     client_ip = Column(Text, nullable=True)
     query_params = Column(JSONB, nullable=True)

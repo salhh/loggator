@@ -19,12 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.create_table(
         "system_events",
-        sa.Column(
-            "id",
-            postgresql.UUID(as_uuid=True),
-            server_default=sa.text("gen_random_uuid()"),
-            nullable=False,
-        ),
+        sa.Column("id", sa.UUID(), nullable=False),
         sa.Column(
             "timestamp",
             sa.DateTime(timezone=True),
@@ -43,12 +38,7 @@ def upgrade() -> None:
 
     op.create_table(
         "audit_log",
-        sa.Column(
-            "id",
-            postgresql.UUID(as_uuid=True),
-            server_default=sa.text("gen_random_uuid()"),
-            nullable=False,
-        ),
+        sa.Column("id", sa.UUID(), nullable=False),
         sa.Column(
             "timestamp",
             sa.DateTime(timezone=True),
