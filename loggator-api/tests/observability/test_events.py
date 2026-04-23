@@ -12,6 +12,7 @@ async def test_info_event_always_written():
     mock_session = AsyncMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session.add = MagicMock()  # add() is synchronous on AsyncSession
 
     with patch("loggator.observability.events.AsyncSessionLocal", return_value=mock_session):
         await writer.write(
@@ -62,6 +63,7 @@ async def test_error_event_written_when_no_open_event():
     mock_session = AsyncMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session.add = MagicMock()  # add() is synchronous on AsyncSession
     mock_session.execute = AsyncMock(return_value=mock_result)
 
     with patch("loggator.observability.events.AsyncSessionLocal", return_value=mock_session):

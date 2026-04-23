@@ -17,6 +17,7 @@ log = structlog.get_logger()
 
 # Only these event_types are subject to de-duplication
 _DEDUP_EVENT_TYPES = frozenset({"error", "disconnected"})
+_DEDUP_WINDOW = timedelta(minutes=5)
 
 
 class SystemEventWriter:
@@ -36,7 +37,7 @@ class SystemEventWriter:
             async with AsyncSessionLocal() as session:
                 # De-duplication for error/disconnected events only
                 if event_type in _DEDUP_EVENT_TYPES:
-                    cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+                    cutoff = datetime.now(timezone.utc) - _DEDUP_WINDOW
                     result = await session.execute(
                         select(SystemEvent)
                         .where(
