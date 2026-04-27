@@ -31,6 +31,8 @@ from loggator.api.routes import schedule as schedule_routes
 from loggator.api.routes import analysis_reports as analysis_reports_routes
 from loggator.api.routes import health as health_routes
 from loggator.api.routes import stats as stats_routes
+from loggator.api.routes import system_events as system_events_routes
+from loggator.api.routes import audit_log as audit_log_routes
 from loggator.api import websocket
 from loggator.observability.middleware import AuditLogMiddleware
 
@@ -93,4 +95,6 @@ app.include_router(schedule_routes.router, prefix="/api/v1")
 app.include_router(analysis_reports_routes.router, prefix="/api/v1")
 app.include_router(health_routes.router, prefix="/api/v1")
 app.include_router(stats_routes.router, prefix="/api/v1")
+app.include_router(system_events_routes.router, prefix="/api/v1")
+app.include_router(audit_log_routes.router, prefix="/api/v1")
 app.include_router(websocket.router)
