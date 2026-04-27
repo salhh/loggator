@@ -142,3 +142,48 @@ export interface StatsResponse {
   log_volume: StatsLogVolume[];
   top_services: StatsTopService[];
 }
+
+// ── Platform Observability ─────────────────────────────────────────────────
+
+export interface SystemEvent {
+  id: string;
+  timestamp: string;
+  service: string;
+  event_type: string;
+  severity: "info" | "warning" | "error" | "critical";
+  message: string;
+  details: Record<string, unknown> | null;
+  resolved_at: string | null;
+}
+
+export interface OpenError {
+  service: string;
+  event_type: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface SystemEventsResponse {
+  summary: {
+    by_service: Record<string, number>;
+    by_severity: Record<string, number>;
+    open_errors: OpenError[];
+  };
+  events: SystemEvent[];
+  total: number;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  request_id: string;
+  method: string;
+  path: string;
+  status_code: number | null;
+  duration_ms: number | null;
+  client_ip: string | null;
+  query_params: Record<string, string> | null;
+  error_detail: string | null;
+  actor_id: string | null;
+  actor_type: string | null;
+}
