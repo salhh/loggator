@@ -7,9 +7,9 @@ AuditLogMiddleware — records every API request to the audit_log table.
 - Skips excluded paths (metrics, status, healthz, system-events, audit-log).
 - Sanitises sensitive query parameters (token, api_key, password, secret).
 """
-import asyncio
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 
 import structlog
 from starlette.background import BackgroundTask
@@ -63,7 +63,7 @@ async def _write_audit_row(
                 status_code=status_code,
                 duration_ms=duration_ms,
                 client_ip=client_ip,
-                query_params=query_params or None,
+                query_params=query_params if query_params else None,
                 error_detail=error_detail,
             )
             session.add(row)
@@ -73,7 +73,7 @@ async def _write_audit_row(
 
 
 class AuditLogMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         if _should_skip(request.url.path):
             return await call_next(request)
 
@@ -86,43 +86,29 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
         start = time.monotonic()
         status_code = 500
-        error_detail = None
+        error_detail: str | None = None
 
         try:
-            response = await call_next(request)
-            status_code = response.status_code
-        except Exception as exc:
-            error_detail = str(exc)
-            duration_ms = int((time.monotonic() - start) * 1000)
-            structlog.contextvars.clear_contextvars()
-            # Fire-and-forget write before re-raising
-            asyncio.create_task(
-                _write_audit_row(
-                    request_id,
-                    request.method,
-                    request.url.path,
-                    status_code,
-                    duration_ms,
-                    client_ip,
-                    query_params,
-                    error_detail,
+            try:
+                response = await call_next(request)
+                status_code = response.status_code
+            except Exception as exc:
+                error_detail = str(exc)
+                duration_ms = int((time.monotonic() - start) * 1000)
+                await _write_audit_row(
+                    request_id, request.method, request.url.path,
+                    status_code, duration_ms, client_ip, query_params, error_detail,
                 )
+                raise
+
+            duration_ms = int((time.monotonic() - start) * 1000)
+            response.headers["X-Request-ID"] = request_id
+            response.background = BackgroundTask(
+                _write_audit_row,
+                request_id, request.method, request.url.path,
+                status_code, duration_ms, client_ip, query_params,
+                error_detail if status_code >= 500 else None,
             )
-            raise
-
-        duration_ms = int((time.monotonic() - start) * 1000)
-        structlog.contextvars.clear_contextvars()
-
-        response.headers["X-Request-ID"] = request_id
-        response.background = BackgroundTask(
-            _write_audit_row,
-            request_id,
-            request.method,
-            request.url.path,
-            status_code,
-            duration_ms,
-            client_ip,
-            query_params,
-            error_detail if status_code >= 500 else None,
-        )
-        return response
+            return response
+        finally:
+            structlog.contextvars.clear_contextvars()

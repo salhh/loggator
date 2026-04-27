@@ -32,6 +32,7 @@ from loggator.api.routes import analysis_reports as analysis_reports_routes
 from loggator.api.routes import health as health_routes
 from loggator.api.routes import stats as stats_routes
 from loggator.api import websocket
+from loggator.observability.middleware import AuditLogMiddleware
 
 log = structlog.get_logger()
 
@@ -79,6 +80,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(AuditLogMiddleware)
 
 app.include_router(status.router, prefix="/api/v1")
 app.include_router(summaries.router, prefix="/api/v1")

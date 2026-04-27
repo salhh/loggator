@@ -89,7 +89,7 @@ async def test_excluded_path_no_request_id(app):
 
 @pytest.mark.asyncio
 async def test_sensitive_query_params_redacted(app):
-    """Sensitive params in query string are redacted before writing."""
+    """Sensitive params in query string are redacted before writing to audit_log."""
     written_rows = []
 
     async def fake_write(request_id, method, path, status_code, duration_ms, client_ip, query_params, error_detail):
@@ -97,13 +97,9 @@ async def test_sensitive_query_params_redacted(app):
 
     with patch("loggator.observability.middleware._write_audit_row", side_effect=fake_write):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            # Trigger background task execution by making the request
             resp = await client.get("/api/v1/anomalies?token=supersecret&limit=10")
 
     assert "x-request-id" in resp.headers
-    # The background task may not have run yet, but params were sanitized before passing
-    # We verify _sanitize_params directly since BackgroundTask runs after response
-    from loggator.observability.middleware import _sanitize_params
-    sanitized = _sanitize_params({"token": "supersecret", "limit": "10"})
-    assert sanitized["token"] == "***"
-    assert sanitized["limit"] == "10"
+    assert len(written_rows) == 1
+    assert written_rows[0]["token"] == "***"
+    assert written_rows[0]["limit"] == "10"
