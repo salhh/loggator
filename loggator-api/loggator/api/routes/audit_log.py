@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,6 +60,8 @@ async def list_audit_log(
             )
         elif status.isdigit():
             filters.append(AuditLog.status_code == int(status))
+        else:
+            raise HTTPException(status_code=422, detail="status must be digits only")
 
     q = (
         select(AuditLog)

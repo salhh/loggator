@@ -74,6 +74,11 @@ async def list_system_events(
         by_service[svc] = by_service.get(svc, 0) + cnt
         by_severity[sev] = by_severity.get(sev, 0) + cnt
 
+    # Total count matching filters (for pagination metadata)
+    total_q = select(func.count()).select_from(SystemEvent).where(and_(*filters))
+    total_result = await session.execute(total_q)
+    total_count = total_result.scalar_one()
+
     # Open errors (last 15 min, unresolved) — drives status board dots
     cutoff_15 = now - timedelta(minutes=15)
     open_q = (
@@ -105,7 +110,7 @@ async def list_system_events(
             ],
         },
         "events": [_event_dict(e) for e in events],
-        "total": len(events),
+        "total": total_count,
     }
 
 
