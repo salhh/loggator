@@ -4,6 +4,7 @@ from opensearchpy import AsyncOpenSearch
 from opensearchpy import AWSV4SignerAsyncAuth
 
 from loggator.config import settings
+from loggator.observability import system_event_writer
 
 log = structlog.get_logger()
 
@@ -45,13 +46,40 @@ def _build_client() -> AsyncOpenSearch:
 
 
 _client: AsyncOpenSearch | None = None
+_last_build_failed = False
 
 
 def get_client() -> AsyncOpenSearch:
-    global _client
+    global _client, _last_build_failed
     if _client is None:
-        _client = _build_client()
-        log.info("opensearch.client.created", auth_type=settings.opensearch_auth_type)
+        try:
+            _client = _build_client()
+            log.info("opensearch.client.created", auth_type=settings.opensearch_auth_type)
+            if _last_build_failed:
+                import asyncio
+                asyncio.create_task(system_event_writer.write(
+                    service="opensearch",
+                    event_type="reconnected",
+                    severity="info",
+                    message="OpenSearch client reconnected after prior failure",
+                    details={"auth_type": settings.opensearch_auth_type},
+                ))
+            _last_build_failed = False
+        except Exception as exc:
+            _last_build_failed = True
+            import asyncio
+            asyncio.create_task(system_event_writer.write(
+                service="opensearch",
+                event_type="disconnected",
+                severity="error",
+                message=f"OpenSearch client failed to initialise: {exc}",
+                details={
+                    "host": settings.opensearch_host,
+                    "port": settings.opensearch_port,
+                    "error": str(exc),
+                },
+            ))
+            raise
     return _client
 
 

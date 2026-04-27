@@ -11,6 +11,7 @@ from langchain_openai import ChatOpenAI
 from loggator.config import settings
 from loggator.llm.prompts import ANOMALY_PROMPT, SUMMARY_MAP_PROMPT, SUMMARY_REDUCE_PROMPT
 from loggator.llm.schemas import AnomalyResult, SummaryResult
+from loggator.observability import system_event_writer
 
 log = structlog.get_logger()
 
@@ -55,6 +56,8 @@ class LLMChain:
                 base_url=settings.ollama_base_url,
             )
         self._semaphore = asyncio.Semaphore(settings.llm_concurrency)
+        self._provider = provider
+        self._last_failed = False
 
     async def generate(self, prompt_type: str, user_content: str) -> dict[str, Any]:
         """
@@ -69,9 +72,30 @@ class LLMChain:
             log.debug("llm.generate", provider=settings.llm_provider, prompt_type=prompt_type)
             try:
                 result = await chain.ainvoke({"logs": user_content})
+                if self._last_failed:
+                    await system_event_writer.write(
+                        service="llm",
+                        event_type="reconnected",
+                        severity="info",
+                        message=f"LLM {self._provider} recovered after prior failure",
+                        details={"provider": self._provider},
+                    )
+                self._last_failed = False
             except Exception as exc:
-                log.error("llm.generate.failed", provider=settings.llm_provider,
+                log.error("llm.generate.failed", provider=self._provider,
                           prompt_type=prompt_type, error=str(exc))
+                self._last_failed = True
+                await system_event_writer.write(
+                    service="llm",
+                    event_type="error",
+                    severity="error",
+                    message=f"LLM {self._provider} generate failed: {exc}",
+                    details={
+                        "provider": self._provider,
+                        "prompt_type": prompt_type,
+                        "error": str(exc),
+                    },
+                )
                 raise
             return result.model_dump()
 
@@ -81,8 +105,28 @@ class LLMChain:
             log.debug("llm.ainvoke", provider=settings.llm_provider)
             try:
                 result = await self._model.ainvoke(messages)
+                if self._last_failed:
+                    await system_event_writer.write(
+                        service="llm",
+                        event_type="reconnected",
+                        severity="info",
+                        message=f"LLM {self._provider} recovered after prior failure",
+                        details={"provider": self._provider},
+                    )
+                self._last_failed = False
             except Exception as exc:
-                log.error("llm.ainvoke.failed", provider=settings.llm_provider, error=str(exc))
+                log.error("llm.ainvoke.failed", provider=self._provider, error=str(exc))
+                self._last_failed = True
+                await system_event_writer.write(
+                    service="llm",
+                    event_type="error",
+                    severity="error",
+                    message=f"LLM {self._provider} invocation failed: {exc}",
+                    details={
+                        "provider": self._provider,
+                        "error": str(exc),
+                    },
+                )
                 raise
             content = result.content
         return content if isinstance(content, str) else str(content)
