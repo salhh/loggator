@@ -11,6 +11,7 @@ from loggator.opensearch.queries import range_query_logs
 from loggator.processing.preprocessor import preprocess
 from loggator.processing.chunker import chunk_docs
 from loggator.processing.mapreduce import summarize_chunks, analyze_chunks
+from loggator.observability import system_event_writer
 
 log = structlog.get_logger()
 
@@ -40,6 +41,13 @@ async def run_batch(
     from_ts = now - timedelta(minutes=window)
 
     log.info("batch.start", index=index, from_ts=from_ts.isoformat(), to_ts=now.isoformat(), window_minutes=window)
+    await system_event_writer.write(
+        service="scheduler",
+        event_type="batch_started",
+        severity="info",
+        message=f"Batch pipeline started for index {index} (window {window}m)",
+        details={"index": index, "window_minutes": window, "from_ts": from_ts.isoformat()},
+    )
 
     # ── 1. Fetch logs from OpenSearch ─────────────────────────────────────────
     try:
@@ -47,6 +55,13 @@ async def run_batch(
         raw_docs = await range_query_logs(os_client, index, from_ts, now)
     except Exception as exc:
         log.error("batch.opensearch.failed", error=str(exc))
+        await system_event_writer.write(
+            service="opensearch",
+            event_type="disconnected",
+            severity="error",
+            message=f"OpenSearch unreachable during batch: {exc}",
+            details={"error": str(exc), "index": index},
+        )
         return None
 
     if not raw_docs:
@@ -70,9 +85,28 @@ async def run_batch(
         result = await summarize_chunks(chunks)
     except Exception as exc:
         log.error("batch.llm.failed", error=str(exc))
+        await system_event_writer.write(
+            service="llm",
+            event_type="batch_failed",
+            severity="error",
+            message=f"Batch pipeline LLM step failed: {exc}",
+            details={"error": str(exc), "index": index, "chunks": len(chunks)},
+        )
         return None
 
     log.info("batch.llm.done", error_count=result.get("error_count", 0))
+    await system_event_writer.write(
+        service="llm",
+        event_type="llm_invoked",
+        severity="info",
+        message=f"LLM batch summarization complete ({len(chunks)} chunks)",
+        details={
+            "index": index,
+            "chunks": len(chunks),
+            "error_count": result.get("error_count", 0),
+            "model": _active_model(),
+        },
+    )
 
     # ── 5. Persist to PostgreSQL ───────────────────────────────────────────────
     summary = Summary(
@@ -92,6 +126,17 @@ async def run_batch(
         saved = await repo.save(summary)
 
     log.info("batch.saved", summary_id=str(saved.id), error_count=saved.error_count)
+    await system_event_writer.write(
+        service="scheduler",
+        event_type="batch_completed",
+        severity="info",
+        message=f"Batch pipeline completed: {saved.error_count} errors found",
+        details={
+            "summary_id": str(saved.id),
+            "index": index,
+            "error_count": saved.error_count,
+        },
+    )
     return saved
 
 
