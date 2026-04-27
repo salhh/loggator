@@ -1,3 +1,4 @@
+import asyncio
 import boto3
 import structlog
 from opensearchpy import AsyncOpenSearch
@@ -56,7 +57,6 @@ def get_client() -> AsyncOpenSearch:
             _client = _build_client()
             log.info("opensearch.client.created", auth_type=settings.opensearch_auth_type)
             if _last_build_failed:
-                import asyncio
                 asyncio.create_task(system_event_writer.write(
                     service="opensearch",
                     event_type="reconnected",
@@ -67,7 +67,6 @@ def get_client() -> AsyncOpenSearch:
             _last_build_failed = False
         except Exception as exc:
             _last_build_failed = True
-            import asyncio
             asyncio.create_task(system_event_writer.write(
                 service="opensearch",
                 event_type="disconnected",
