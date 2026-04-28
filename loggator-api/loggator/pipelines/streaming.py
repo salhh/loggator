@@ -12,6 +12,7 @@ from loggator.processing.preprocessor import preprocess
 from loggator.processing.chunker import chunk_docs
 from loggator.processing.mapreduce import analyze_chunks_for_anomalies
 from loggator.alerts.dispatcher import dispatch
+from loggator.observability import system_event_writer
 
 log = structlog.get_logger()
 
@@ -70,6 +71,17 @@ async def _process_batch(docs: list[dict], index_pattern: str, session) -> list[
 
         # Dispatch alerts (Slack / email / webhook)
         await dispatch(anomaly, session)
+        await system_event_writer.write(
+            service="streaming",
+            event_type="llm_invoked",
+            severity="info",
+            message=f"Streaming anomaly detected: {severity} in {index_pattern}",
+            details={
+                "index_pattern": index_pattern,
+                "severity": severity,
+                "anomaly_id": str(anomaly.id),
+            },
+        )
 
     return saved
 
@@ -117,6 +129,13 @@ async def run_streaming_worker(index_pattern: str | None = None) -> None:
             break
         except Exception as exc:
             log.error("streaming.error", error=str(exc))
+            await system_event_writer.write(
+                service="streaming",
+                event_type="error",
+                severity="error",
+                message=f"Streaming worker error: {exc}",
+                details={"error": str(exc), "index_pattern": index_pattern},
+            )
 
         await asyncio.sleep(settings.streaming_poll_interval_seconds)
 

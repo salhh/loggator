@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from loggator.config import settings
 from loggator.db.models import Alert, Anomaly
+from loggator.observability import system_event_writer
 
 log = structlog.get_logger()
 
@@ -161,6 +162,20 @@ async def dispatch(anomaly: Anomaly, session) -> list[Alert]:
         session.add(alert)
         await session.commit()
         await session.refresh(alert)
+        await system_event_writer.write(
+            service="alerts",
+            event_type="alert_dispatched",
+            severity="info" if ok else "error",
+            message=f"Alert {channel} to {destination}: {'sent' if ok else 'failed'}",
+            details={
+                "channel": channel,
+                "destination": destination,
+                "ok": ok,
+                "error": error or None,
+                "anomaly_id": str(anomaly.id),
+                "severity": anomaly.severity,
+            },
+        )
         return alert
 
     # Slack

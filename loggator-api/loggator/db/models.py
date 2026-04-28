@@ -105,3 +105,33 @@ class ScheduledAnalysis(Base):
     chunk_count = Column(Integer, nullable=False, default=0)
     model_used = Column(String(100), nullable=False)
     status = Column(String(20), nullable=False, default="success")  # "success" | "failed"
+
+
+class SystemEvent(Base):
+    __tablename__ = "system_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    service = Column(Text, nullable=False)   # llm | opensearch | postgres | scheduler | alerts | streaming
+    event_type = Column(Text, nullable=False)
+    severity = Column(Text, nullable=False)  # info | warning | error | critical
+    message = Column(Text, nullable=False)
+    details = Column(JSONB, nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    request_id = Column(Text, nullable=False)
+    method = Column(Text, nullable=False)
+    path = Column(Text, nullable=False)
+    status_code = Column(Integer, nullable=True)  # None if request crashed before response
+    duration_ms = Column(Integer, nullable=True)
+    client_ip = Column(Text, nullable=True)
+    query_params = Column(JSONB, nullable=True)
+    error_detail = Column(Text, nullable=True)
+    actor_id = Column(Text, nullable=True)
+    actor_type = Column(Text, nullable=True)

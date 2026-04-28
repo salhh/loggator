@@ -1,4 +1,4 @@
-import type { Summary, Anomaly, Alert, StatusResponse, AnalysisReport, ScheduledAnalysis, ScheduleStatus, HealthResponse, StatsResponse } from "./types";
+import type { Summary, Anomaly, Alert, StatusResponse, AnalysisReport, ScheduledAnalysis, ScheduleStatus, HealthResponse, StatsResponse, SystemEventsResponse, SystemEvent, AuditLogEntry } from "./types";
 
 // API_URL is only available server-side (no NEXT_PUBLIC_ prefix).
 // NEXT_PUBLIC_API_URL is used by the browser. Fall back to localhost for dev.
@@ -69,4 +69,45 @@ export const api = {
     get<HealthResponse>("/health"),
   stats: (days = 7) =>
     get<StatsResponse>(`/stats?days=${days}`),
+  systemEvents: (params?: {
+    service?: string;
+    severity?: string;
+    event_type?: string;
+    from_ts?: string;
+    to_ts?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.service) qs.set("service", params.service);
+    if (params?.severity) qs.set("severity", params.severity);
+    if (params?.event_type) qs.set("event_type", params.event_type);
+    if (params?.from_ts) qs.set("from_ts", params.from_ts);
+    if (params?.to_ts) qs.set("to_ts", params.to_ts);
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+    if (params?.offset !== undefined) qs.set("offset", String(params.offset));
+    const q = qs.toString();
+    return get<SystemEventsResponse>(`/system-events${q ? `?${q}` : ""}`);
+  },
+  systemEvent: (id: string) => get<SystemEvent>(`/system-events/${id}`),
+  auditLog: (params?: {
+    path?: string;
+    method?: string;
+    status?: string;
+    from_ts?: string;
+    to_ts?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.path) qs.set("path", params.path);
+    if (params?.method) qs.set("method", params.method);
+    if (params?.status) qs.set("status", params.status);
+    if (params?.from_ts) qs.set("from_ts", params.from_ts);
+    if (params?.to_ts) qs.set("to_ts", params.to_ts);
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+    if (params?.offset !== undefined) qs.set("offset", String(params.offset));
+    const q = qs.toString();
+    return get<AuditLogEntry[]>(`/audit-log${q ? `?${q}` : ""}`);
+  },
 };
