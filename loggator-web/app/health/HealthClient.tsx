@@ -27,7 +27,11 @@ export default function HealthClient() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // stable: only calls api and state setters
+
+  // Stable callback so SystemEventFeed's polling interval isn't reset every
+  // second by the elapsed-counter re-render cycle in this component.
+  const handleDataUpdate = useCallback((d: SystemEventsResponse) => setData(d), []);
 
   useEffect(() => {
     fetchData();
@@ -97,7 +101,7 @@ export default function HealthClient() {
           </button>
         </div>
 
-        {tab === "events" && <SystemEventFeed onDataUpdate={(d) => setData(d)} />}
+        {tab === "events" && <SystemEventFeed onDataUpdate={handleDataUpdate} />}
         {tab === "audit" && <AuditLogTable />}
       </div>
     </div>
