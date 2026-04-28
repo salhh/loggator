@@ -1,8 +1,12 @@
 import asyncio
 import json
 import structlog
+from typing import TYPE_CHECKING, Optional
 
 from loggator.llm.chain import llm_chain
+
+if TYPE_CHECKING:
+    from loggator.llm.chain import LLMChain
 
 log = structlog.get_logger()
 
@@ -80,7 +84,7 @@ async def summarize_chunks(
     return final
 
 
-async def analyze_chunks(chunks: list[str]) -> dict:
+async def analyze_chunks(chunks: list[str], chain: "Optional[LLMChain]" = None) -> dict:
     """
     Deep root cause analysis via map-reduce:
     1. Map: analyse each chunk with analysis_map in parallel
@@ -98,11 +102,12 @@ async def analyze_chunks(chunks: list[str]) -> dict:
             "warning_count": 0,
         }
 
+    _chain = chain or llm_chain
     log.info("analyze.map.start", chunks=len(chunks))
 
     async def _map_one(chunk: str, idx: int) -> dict:
         log.info("analyze.map.chunk", idx=idx)
-        return await llm_chain.generate("analysis_map", chunk)
+        return await _chain.generate("analysis_map", chunk)
 
     map_tasks = [_map_one(chunk, i) for i, chunk in enumerate(chunks)]
     map_results = await asyncio.gather(*map_tasks, return_exceptions=True)
@@ -141,7 +146,7 @@ async def analyze_chunks(chunks: list[str]) -> dict:
 
     reduce_input = json.dumps(partial, indent=2)
     log.info("analyze.reduce.start")
-    final = await llm_chain.generate("analysis_reduce", reduce_input)
+    final = await _chain.generate("analysis_reduce", reduce_input)
     final["error_count"] = total_errors
     final["warning_count"] = total_warnings
     log.info("analyze.reduce.done")

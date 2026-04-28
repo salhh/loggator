@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, BackgroundTasks, Depends
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
@@ -5,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.config import settings
 from loggator.db.session import get_session, AsyncSessionLocal
-from loggator.llm.chain import llm_chain
+from loggator.llm.chain import llm_chain, LLMChain
 from loggator.llm.prompts import CHAT_SYSTEM
 from loggator.rag.retriever import retrieve
 from loggator.rag.embedder import index_docs
@@ -15,9 +17,22 @@ from loggator.processing.chunker import chunk_docs
 router = APIRouter(tags=["chat"])
 
 
+async def _get_chain(model_id: Optional[str], session: AsyncSession) -> LLMChain:
+    """Return the global chain or build one from a registered config."""
+    if not model_id:
+        return llm_chain
+    from loggator.db.llm_registry import get_llm_raw, LLMNotFound
+    try:
+        config = await get_llm_raw(session, model_id)
+    except LLMNotFound:
+        return llm_chain
+    return LLMChain(config=config)
+
+
 class ChatIn(BaseModel):
     message: str
     top_k: int = 10
+    model_id: Optional[str] = None
 
 
 class ChatOut(BaseModel):
@@ -28,15 +43,13 @@ class ChatOut(BaseModel):
 @router.post("/chat", response_model=ChatOut)
 async def chat(body: ChatIn, session: AsyncSession = Depends(get_session)):
     logs = await retrieve(body.message, session, top_k=body.top_k)
-
     context = "\n".join(f"- {line}" for line in logs)
-
     messages = [
         SystemMessage(content=CHAT_SYSTEM),
         HumanMessage(content=f"Log context:\n{context}\n\nQuestion: {body.message}"),
     ]
-    answer = await llm_chain.ainvoke(messages)
-
+    chain = await _get_chain(body.model_id, session)
+    answer = await chain.ainvoke(messages)
     return ChatOut(answer=answer, context_logs=logs)
 
 
@@ -72,14 +85,11 @@ class AnalyzeIn(BaseModel):
     index_pattern: str = settings.opensearch_index_pattern
     hours_back: float = 1.0
     size: int = 500
+    model_id: Optional[str] = None
 
 
 @router.post("/chat/analyze")
-async def analyze_logs(body: AnalyzeIn):
-    """
-    Fetch logs for the given time window, run deep map-reduce root cause
-    analysis via Ollama, and return a structured RCA report.
-    """
+async def analyze_logs(body: AnalyzeIn, session: AsyncSession = Depends(get_session)):
     from datetime import datetime, timezone, timedelta
     from loggator.opensearch.client import get_client
     from loggator.opensearch.queries import range_query_logs
@@ -95,20 +105,13 @@ async def analyze_logs(body: AnalyzeIn):
     if not docs:
         return {
             "summary": "No logs found in the specified time range.",
-            "affected_services": [],
-            "root_causes": [],
-            "timeline": [],
-            "recommendations": [],
-            "error_count": 0,
-            "warning_count": 0,
-            "log_count": 0,
-            "chunk_count": 0,
-            "from_ts": from_ts.isoformat(),
-            "to_ts": to_ts.isoformat(),
+            "affected_services": [], "root_causes": [], "timeline": [],
+            "recommendations": [], "error_count": 0, "warning_count": 0, "log_count": 0,
         }
 
     chunks = chunk_docs(docs)
-    result = await analyze_chunks(chunks)
+    chain = await _get_chain(body.model_id, session)
+    result = await analyze_chunks(chunks, chain=chain)
     result["log_count"] = len(docs)
     result["chunk_count"] = len(chunks)
     result["from_ts"] = from_ts.isoformat()

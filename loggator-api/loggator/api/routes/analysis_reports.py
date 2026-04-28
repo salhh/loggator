@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,9 +20,9 @@ class ScheduledAnalysisOut(BaseModel):
     index_pattern: str
     summary: str
     affected_services: list[str]
-    root_causes: list[dict]
-    timeline: list[str]
-    recommendations: list[dict]
+    root_causes: list[Any]
+    timeline: list[Any]
+    recommendations: list[Any]
     error_count: int
     warning_count: int
     log_count: int

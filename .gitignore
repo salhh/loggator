@@ -36,3 +36,4 @@ Thumbs.db
 
 # Backup files
 backups/*.sql.gz
+docker-compose.override.yml
