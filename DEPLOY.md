@@ -36,10 +36,11 @@
 
 ## Frontend
 
-- Operators paste the **access token** in the sidebar and pick **Tenant** when the token carries multiple tenants or when using `X-Tenant-Id` for platform support.
+- Sign in via `/login` using **SSO** (OIDC) or **dev token** (credentials provider).
+- Tenancy is selected from the left sidebar (**Tenant** selector) and sent to the API as `X-Tenant-Id`.
 - Set `NEXT_PUBLIC_API_URL` to the public API base (e.g. `https://api.example.com/api/v1`).
 - **Platform UI:** `/platform/tenants` in the web app lists and creates tenants (requires `platform_admin` JWT, or `AUTH_DISABLED=true` in dev).
-- **Live WebSocket:** `NEXT_PUBLIC_WS_URL` should point at `wss://…/ws/live`. The browser sends `access_token` and `tenant_id` query params from the sidebar so only that tenant’s anomaly/summary events are delivered (platform admins receive all tenants’ events).
+- **Live WebSocket:** `NEXT_PUBLIC_WS_URL` should point at `wss://…/ws/live`. The browser sends `access_token` and `tenant_id` query params so only that tenant’s anomaly/summary events are delivered (platform admins receive all tenants’ events).
 
 ## Tenant roles (RBAC)
 

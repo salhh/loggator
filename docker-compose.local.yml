@@ -105,6 +105,10 @@ services:
       AUTH_ALLOW_TOKEN_LOGIN: ${AUTH_ALLOW_TOKEN_LOGIN:-true}
       NEXT_PUBLIC_AUTH_ALLOW_TOKEN: ${NEXT_PUBLIC_AUTH_ALLOW_TOKEN:-true}
       NEXT_PUBLIC_AUTH_SSO_ENABLED: ${NEXT_PUBLIC_AUTH_SSO_ENABLED:-false}
+      # Optional OIDC federated logout:
+      # - Example (Keycloak): https://idp.example.com/realms/<realm>/protocol/openid-connect/logout
+      NEXT_PUBLIC_AUTH_END_SESSION_URL: ${NEXT_PUBLIC_AUTH_END_SESSION_URL:-}
+      NEXT_PUBLIC_AUTH_POST_LOGOUT_REDIRECT_URI: ${NEXT_PUBLIC_AUTH_POST_LOGOUT_REDIRECT_URI:-}
       # Optional OIDC: AUTH_ISSUER, AUTH_CLIENT_ID, AUTH_CLIENT_SECRET (set NEXT_PUBLIC_AUTH_SSO_ENABLED=true)
     depends_on:
       api:

@@ -79,6 +79,9 @@ export const authConfig = {
         token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
       }
+      if (account?.id_token) {
+        token.idToken = account.id_token;
+      }
       if (user?.accessToken) {
         token.accessToken = user.accessToken;
       }
@@ -86,6 +89,7 @@ export const authConfig = {
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string | undefined;
+      session.idToken = token.idToken as string | undefined;
       return session;
     },
   },

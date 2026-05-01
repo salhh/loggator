@@ -40,7 +40,9 @@ export default function TenantBar() {
     setStoredAccessToken(null);
     setStoredTenantId(null);
     setSessionAccessToken(null);
-    if (session) await signOut({ callbackUrl: "/login" });
+    if (session) {
+      if (typeof window !== "undefined") window.location.href = "/logout";
+    }
     else {
       setAccessToken(null);
       if (typeof window !== "undefined") window.location.href = "/login";
