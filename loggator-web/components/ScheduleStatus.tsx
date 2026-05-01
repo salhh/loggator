@@ -19,9 +19,9 @@ function Row({ label, value, accent }: { label: string; value: string; accent?: 
       <span
         className={`text-xs font-mono ${
           accent === "green"
-            ? "text-emerald-400"
+            ? "text-success"
             : accent === "red"
-            ? "text-red-400"
+            ? "text-destructive"
             : "text-foreground"
         }`}
       >
@@ -54,7 +54,7 @@ export default function ScheduleStatusWidget() {
         <span
           className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${
             status.enabled
-              ? "border-emerald-800 bg-emerald-950/40 text-emerald-400"
+              ? "border-success/40 bg-success/10 text-success"
               : "border-border text-muted-foreground"
           }`}
         >

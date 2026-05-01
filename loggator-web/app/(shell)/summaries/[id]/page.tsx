@@ -54,7 +54,7 @@ export default async function SummaryDetailPage({
             <ol className="space-y-2">
               {summary.top_issues.map((issue, i) => (
                 <li key={i} className="flex gap-2 text-sm">
-                  <span className="text-cyan-400 font-semibold shrink-0">{i + 1}.</span>
+                  <span className="text-primary font-semibold shrink-0">{i + 1}.</span>
                   <span className="text-muted-foreground">{issue}</span>
                 </li>
               ))}
@@ -68,7 +68,7 @@ export default async function SummaryDetailPage({
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Recommendation
             </div>
-            <p className="border-l-2 border-cyan-400 pl-4 py-1 text-sm text-muted-foreground leading-relaxed">
+            <p className="border-l-2 border-primary pl-4 py-1 text-sm text-muted-foreground leading-relaxed">
               {summary.recommendation}
             </p>
           </div>

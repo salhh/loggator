@@ -133,14 +133,14 @@ export default function ChatClient() {
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-foreground">Log analysis controls</span>
             {indexDone && (
-              <span className="text-xs text-emerald-400 flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block" />
+              <span className="text-xs text-success flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-success inline-block" />
                 Indexed
               </span>
             )}
             {analysisReport && (
-              <span className="text-xs text-cyan-400 flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 inline-block" />
+              <span className="text-xs text-primary flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary inline-block" />
                 Analysis ready
               </span>
             )}
@@ -161,15 +161,15 @@ export default function ChatClient() {
                   <button key={p.label} onClick={() => { setUseCustom(false); setHoursBack(p.hours); }}
                     className={`px-3 py-1 rounded-md text-xs font-medium border transition-colors ${
                       !useCustom && hoursBack === p.hours
-                        ? "bg-cyan-400 text-black border-cyan-400"
-                        : "border-border text-muted-foreground hover:border-cyan-400 hover:text-foreground"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground hover:border-primary hover:text-foreground"
                     }`}>
                     {p.label}
                   </button>
                 ))}
                 <button onClick={() => setUseCustom(true)}
                   className={`px-3 py-1 rounded-md text-xs font-medium border transition-colors ${
-                    useCustom ? "bg-cyan-400 text-black border-cyan-400" : "border-border text-muted-foreground hover:border-cyan-400 hover:text-foreground"
+                    useCustom ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-foreground"
                   }`}>
                   Custom
                 </button>
@@ -178,7 +178,7 @@ export default function ChatClient() {
                 <div className="flex items-center gap-2">
                   <input type="number" min="0.1" step="0.5" placeholder="e.g. 4" value={customHours}
                     onChange={(e) => setCustomHours(e.target.value)}
-                    className="w-24 bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-cyan-400 transition-colors" />
+                    className="w-24 bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-primary transition-colors" />
                   <span className="text-sm text-muted-foreground">hours back from now</span>
                 </div>
               )}
@@ -195,7 +195,7 @@ export default function ChatClient() {
                   {[100, 250, 500, 1000].map((n) => (
                     <button key={n} onClick={() => setMaxLogs(n)}
                       className={`px-2.5 py-1 rounded text-xs font-mono border transition-colors ${
-                        maxLogs === n ? "bg-cyan-400 text-black border-cyan-400" : "border-border text-muted-foreground hover:border-cyan-400 hover:text-foreground"
+                        maxLogs === n ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-foreground"
                       }`}>
                       {n}
                     </button>
@@ -205,7 +205,7 @@ export default function ChatClient() {
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Index pattern</label>
                 <select value={indexPattern} onChange={(e) => setIndexPattern(e.target.value)}
-                  className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-cyan-400 transition-colors">
+                  className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-primary transition-colors">
                   <option value="">Default (logs-*)</option>
                   {indices.map((idx) => <option key={idx} value={idx}>{idx}</option>)}
                 </select>
@@ -220,9 +220,9 @@ export default function ChatClient() {
               </button>
 
               <button onClick={triggerAnalyze} disabled={analysing || indexing || (useCustom && !customHours)}
-                className="px-4 py-2 rounded-md bg-cyan-400 text-black text-sm font-semibold hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                 {analysing
-                  ? <span className="flex items-center gap-2"><span className="h-3 w-3 rounded-full border-2 border-black border-t-transparent animate-spin" />Analysing…</span>
+                  ? <span className="flex items-center gap-2"><span className="h-3 w-3 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />Analysing…</span>
                   : "Analyse & root cause"}
               </button>
             </div>
@@ -249,7 +249,7 @@ export default function ChatClient() {
                 setMessages([]);
                 try { localStorage.removeItem("loggator_chat_history"); } catch { /* ignore */ }
               }}
-              className="text-xs text-muted-foreground hover:text-red-400 border border-border hover:border-red-900 px-2 py-1 rounded transition-colors"
+              className="text-xs text-muted-foreground hover:text-destructive border border-border hover:border-destructive/50 px-2 py-1 rounded transition-colors"
             >
               Clear history
             </button>
@@ -260,7 +260,7 @@ export default function ChatClient() {
         )}
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "flex justify-end" : ""}>
-            <div className={`max-w-2xl rounded-lg border p-3 space-y-2 ${m.role === "user" ? "bg-card border-cyan-400/40" : "bg-card border-border"}`}>
+            <div className={`max-w-2xl rounded-lg border p-3 space-y-2 ${m.role === "user" ? "bg-card border-primary/35" : "bg-card border-border"}`}>
               <p className="text-sm whitespace-pre-wrap">{m.content}</p>
               {m.contextLogs && m.contextLogs.length > 0 && (
                 <details className="text-xs">
@@ -277,7 +277,7 @@ export default function ChatClient() {
         ))}
         {loading && (
           <div className="max-w-2xl rounded-lg border border-border bg-card p-3 flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
+            <span className="h-3 w-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
             <p className="text-sm text-muted-foreground">Thinking…</p>
           </div>
         )}
@@ -291,7 +291,7 @@ export default function ChatClient() {
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
         />
         <button onClick={send} disabled={loading || !input.trim()}
-          className="px-4 rounded-md bg-cyan-400 text-black text-sm font-semibold hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+          className="px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
           Send
         </button>
       </div>

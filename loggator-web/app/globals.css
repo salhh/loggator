@@ -39,6 +39,12 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-header: var(--header);
+  --color-header-border: var(--header-border);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -48,7 +54,49 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Balanced SaaS light (default) */
 :root {
+  --background: oklch(98.2% 0.006 264);
+  --foreground: oklch(24% 0.022 264);
+  --card: oklch(100% 0.002 264);
+  --card-foreground: oklch(24% 0.022 264);
+  --popover: oklch(100% 0.002 264);
+  --popover-foreground: oklch(24% 0.022 264);
+  --primary: oklch(42% 0.11 196);
+  --primary-foreground: oklch(99% 0 0);
+  --secondary: oklch(96.5% 0.008 264);
+  --secondary-foreground: oklch(30% 0.02 264);
+  --muted: oklch(95.5% 0.01 264);
+  --muted-foreground: oklch(46% 0.022 264);
+  --accent: oklch(94% 0.018 196);
+  --accent-foreground: oklch(30% 0.055 196);
+  --destructive: oklch(52% 0.19 27);
+  --border: oklch(88% 0.012 264);
+  --input: oklch(88% 0.012 264);
+  --ring: oklch(42% 0.11 196);
+  --success: oklch(48% 0.12 152);
+  --success-foreground: oklch(99% 0.02 152);
+  --warning: oklch(72% 0.14 76);
+  --warning-foreground: oklch(28% 0.06 76);
+  --chart-1: oklch(45% 0.14 196);
+  --chart-2: oklch(52% 0.2 27);
+  --chart-3: oklch(55% 0.14 70);
+  --chart-4: oklch(50% 0.12 150);
+  --chart-5: oklch(48% 0.08 264);
+  --radius: 0.5rem;
+  --sidebar: oklch(97.5% 0.008 264);
+  --sidebar-foreground: oklch(24% 0.022 264);
+  --sidebar-primary: oklch(42% 0.11 196);
+  --sidebar-primary-foreground: oklch(99% 0 0);
+  --sidebar-accent: oklch(93.5% 0.014 264);
+  --sidebar-accent-foreground: oklch(30% 0.055 196);
+  --sidebar-border: oklch(88% 0.012 264);
+  --sidebar-ring: oklch(42% 0.11 196);
+  --header: oklch(100% 0.002 264);
+  --header-border: oklch(88% 0.012 264);
+}
+
+.dark {
   --background: oklch(13.7% 0.017 264);
   --foreground: oklch(98% 0 0);
   --card: oklch(19.8% 0.014 264);
@@ -66,13 +114,16 @@
   --destructive: oklch(59% 0.22 27);
   --border: oklch(24% 0.012 264);
   --input: oklch(24% 0.012 264);
-  --ring: oklch(83% 0.15 196);
+  --ring: oklch(78% 0.12 196);
+  --success: oklch(68% 0.14 152);
+  --success-foreground: oklch(16% 0.04 152);
+  --warning: oklch(78% 0.12 76);
+  --warning-foreground: oklch(22% 0.05 76);
   --chart-1: oklch(83% 0.15 196);
   --chart-2: oklch(59% 0.22 27);
   --chart-3: oklch(74% 0.16 70);
   --chart-4: oklch(72% 0.18 150);
   --chart-5: oklch(60% 0.14 264);
-  --radius: 0.5rem;
   --sidebar: oklch(19.8% 0.014 264);
   --sidebar-foreground: oklch(98% 0 0);
   --sidebar-primary: oklch(83% 0.15 196);
@@ -81,14 +132,19 @@
   --sidebar-accent-foreground: oklch(83% 0.15 196);
   --sidebar-border: oklch(24% 0.012 264);
   --sidebar-ring: oklch(83% 0.15 196);
+  --header: oklch(19.8% 0.014 264);
+  --header-border: oklch(24% 0.012 264);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
+  }
+  :where(a, button, input, textarea, select, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+    @apply outline-none ring-2 ring-ring/80 ring-offset-2 ring-offset-background;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
   }
   html {
     @apply font-sans;

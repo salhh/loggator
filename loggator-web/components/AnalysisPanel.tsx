@@ -12,7 +12,7 @@ export const severityBadge: Record<string, string> = {
 export const priorityBadge: Record<string, string> = {
   immediate:    "bg-red-950/40 text-red-400 border-red-900",
   "short-term": "bg-amber-950/40 text-amber-400 border-amber-900",
-  "long-term":  "bg-cyan-950/40 text-cyan-400 border-cyan-900/40",
+  "long-term":  "bg-primary/12 text-primary border-primary/35",
 };
 
 function fmt(iso: string) {
@@ -45,7 +45,7 @@ export default function AnalysisPanel({
           {onClose && (
             <button
               onClick={onClose}
-              className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded border border-border hover:border-cyan-400 transition-colors"
+              className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded border border-border hover:border-primary transition-colors"
             >
               ✕
             </button>

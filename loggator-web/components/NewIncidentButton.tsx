@@ -33,7 +33,7 @@ export default function NewIncidentButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="px-3 py-1.5 rounded-md bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-colors"
+        className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium transition-colors"
       >
         + New Incident
       </button>
@@ -53,7 +53,7 @@ export default function NewIncidentButton() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Suspicious lateral movement detected"
-                className="w-full text-sm bg-background border border-border rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-full text-sm bg-background border border-border rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
 
@@ -62,7 +62,7 @@ export default function NewIncidentButton() {
               <select
                 value={severity}
                 onChange={(e) => setSeverity(e.target.value)}
-                className="w-full text-sm bg-background border border-border rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-full text-sm bg-background border border-border rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -77,11 +77,11 @@ export default function NewIncidentButton() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                className="w-full text-sm bg-background border border-border rounded px-2.5 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                className="w-full text-sm bg-background border border-border rounded px-2.5 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
 
-            {error && <p className="text-xs text-red-400">{error}</p>}
+            {error && <p className="text-xs text-destructive">{error}</p>}
 
             <div className="flex items-center gap-3 justify-end">
               <button
@@ -93,7 +93,7 @@ export default function NewIncidentButton() {
               <button
                 onClick={handleCreate}
                 disabled={isPending || !title.trim()}
-                className="px-4 py-1.5 rounded-md bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white text-sm font-medium transition-colors"
+                className="px-4 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 text-sm font-medium transition-colors"
               >
                 {isPending ? "Creating…" : "Create"}
               </button>

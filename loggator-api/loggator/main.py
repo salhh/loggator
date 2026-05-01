@@ -39,6 +39,7 @@ from loggator.api.routes import tenants as tenants_routes
 from loggator.api.routes import platform_tenants as platform_tenants_routes
 from loggator.api.routes import tenant_api_keys as tenant_api_keys_routes
 from loggator.api.routes import tenant_members as tenant_members_routes
+from loggator.api.routes import tenant_integrations as tenant_integrations_routes
 from loggator.api.routes import platform_users as platform_users_routes
 from loggator.api.routes import platform_billing as platform_billing_routes
 from loggator.api.routes import platform_audit_log as platform_audit_log_routes
@@ -132,6 +133,7 @@ app.include_router(tenants_routes.router, prefix="/api/v1")
 app.include_router(platform_tenants_routes.router, prefix="/api/v1")
 app.include_router(tenant_api_keys_routes.router, prefix="/api/v1")
 app.include_router(tenant_members_routes.router, prefix="/api/v1")
+app.include_router(tenant_integrations_routes.router, prefix="/api/v1")
 app.include_router(platform_users_routes.router, prefix="/api/v1")
 app.include_router(platform_billing_routes.router, prefix="/api/v1")
 app.include_router(platform_audit_log_routes.router, prefix="/api/v1")

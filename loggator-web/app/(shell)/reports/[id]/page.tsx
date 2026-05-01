@@ -49,7 +49,7 @@ export default async function ReportDetailPage({
         <span
           className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${
             record.status === "success"
-              ? "border-emerald-800 bg-emerald-950/40 text-emerald-400"
+              ? "border-success/40 bg-success/10 text-success"
               : "border-red-900 bg-red-950/40 text-red-400"
           }`}
         >

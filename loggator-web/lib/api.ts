@@ -1,4 +1,4 @@
-import type { Summary, Anomaly, Alert, StatusResponse, AnalysisReport, ScheduledAnalysis, ScheduleStatus, HealthResponse, StatsResponse, SystemEventsResponse, SystemEvent, AuditLogEntry, BillingPlan, TenantBilling, TenantStats, TenantConnection, Incident, IncidentComment, DetectionRule } from "./types";
+import type { Summary, Anomaly, Alert, StatusResponse, AnalysisReport, ScheduledAnalysis, ScheduleStatus, HealthResponse, StatsResponse, SystemEventsResponse, SystemEvent, AuditLogEntry, BillingPlan, TenantBilling, TenantStats, TenantConnection, TenantIntegration, Incident, IncidentComment, DetectionRule } from "./types";
 import { authHeaders } from "./auth-headers";
 
 // API_URL is only available server-side (no NEXT_PUBLIC_ prefix).
@@ -361,6 +361,52 @@ export const api = {
     }>(`/tenant/members/${membershipId}`, body, xTenantId),
   removeTenantMember: (membershipId: string, xTenantId?: string) =>
     del<{ ok: boolean }>(`/tenant/members/${membershipId}`, xTenantId),
+
+  listTenantIntegrations: (xTenantId?: string) => get<TenantIntegration[]>("/tenant/integrations", xTenantId),
+  createTenantIntegration: (
+    body: {
+      name: string;
+      provider: "opensearch" | "elasticsearch" | "wazuh_indexer" | "wazuh_api";
+      is_primary?: boolean;
+      extra_config?: Record<string, unknown> | null;
+      opensearch_host?: string | null;
+      opensearch_port?: number | null;
+      opensearch_auth_type?: string | null;
+      opensearch_username?: string | null;
+      opensearch_password?: string | null;
+      opensearch_api_key?: string | null;
+      opensearch_use_ssl?: boolean | null;
+      opensearch_verify_certs?: boolean | null;
+      opensearch_ca_certs?: string | null;
+      aws_region?: string | null;
+      opensearch_index_pattern?: string | null;
+    },
+    xTenantId?: string
+  ) => post<TenantIntegration>("/tenant/integrations", body, xTenantId),
+  patchTenantIntegration: (
+    id: string,
+    body: Partial<{
+      name: string;
+      is_primary: boolean;
+      extra_config: Record<string, unknown> | null;
+      opensearch_host: string | null;
+      opensearch_port: number | null;
+      opensearch_auth_type: string | null;
+      opensearch_username: string | null;
+      opensearch_password: string | null;
+      opensearch_api_key: string | null;
+      opensearch_use_ssl: boolean | null;
+      opensearch_verify_certs: boolean | null;
+      opensearch_ca_certs: string | null;
+      aws_region: string | null;
+      opensearch_index_pattern: string | null;
+    }>,
+    xTenantId?: string
+  ) => patch<TenantIntegration>(`/tenant/integrations/${id}`, body, xTenantId),
+  deleteTenantIntegration: (id: string, xTenantId?: string) =>
+    del<{ ok: boolean }>(`/tenant/integrations/${id}`, xTenantId),
+  testTenantIntegration: (id: string, xTenantId?: string) =>
+    post<Record<string, unknown>>(`/tenant/integrations/${id}/test`, {}, xTenantId),
 
   // Billing plans
   platformBillingPlans: () => get<BillingPlan[]>("/platform/billing/plans"),

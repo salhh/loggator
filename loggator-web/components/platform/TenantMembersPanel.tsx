@@ -88,7 +88,7 @@ export default function TenantMembersPanel({ tenantId }: Props) {
         type="button"
         disabled={loading || !newSubject.trim()}
         onClick={addMember}
-        className="px-3 py-2 rounded-md bg-amber-400 text-black text-sm font-semibold disabled:opacity-40 hover:bg-amber-300 transition-colors"
+        className="px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 hover:bg-primary/90 transition-colors"
       >
         Add member
       </button>
@@ -122,7 +122,7 @@ export default function TenantMembersPanel({ tenantId }: Props) {
               </select>
               <button
                 type="button"
-                className="text-red-400 hover:underline"
+                className="text-destructive hover:underline"
                 onClick={async () => {
                   if (!confirm(`Remove ${m.subject}?`)) return;
                   try {

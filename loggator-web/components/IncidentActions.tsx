@@ -6,8 +6,8 @@ import { api } from "@/lib/api";
 
 const STATUSES = [
   { value: "open",           label: "Open",           cls: "border-red-700 text-red-300" },
-  { value: "investigating",  label: "Investigating",  cls: "border-amber-700 text-amber-300" },
-  { value: "resolved",       label: "Resolved",       cls: "border-emerald-700 text-emerald-300" },
+  { value: "investigating",  label: "Investigating",  cls: "border-warning/50 text-warning" },
+  { value: "resolved",       label: "Resolved",       cls: "border-success/50 text-success" },
   { value: "false_positive", label: "False Positive", cls: "border-zinc-600 text-zinc-400" },
 ];
 
@@ -75,19 +75,19 @@ export default function IncidentActions({ incidentId, currentStatus }: IncidentA
         onChange={(e) => setComment(e.target.value)}
         placeholder="Add a comment…"
         rows={3}
-        className="w-full text-xs bg-background border border-border rounded px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-cyan-500"
+        className="w-full text-xs bg-background border border-border rounded px-2.5 py-1.5 text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-ring"
       />
 
       <div className="flex items-center gap-3">
         <button
           onClick={handleSave}
           disabled={isPending || !changed}
-          className="px-3 py-1 rounded text-xs font-medium bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+          className="px-3 py-1 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {isPending ? "Saving…" : "Save"}
         </button>
-        {success && <span className="text-xs text-emerald-400">Saved</span>}
-        {error && <span className="text-xs text-red-400">{error}</span>}
+        {success && <span className="text-xs text-success">Saved</span>}
+        {error && <span className="text-xs text-destructive">{error}</span>}
       </div>
     </div>
   );

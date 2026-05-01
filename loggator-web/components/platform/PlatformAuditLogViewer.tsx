@@ -7,16 +7,16 @@ import type { AuditLogEntry } from "@/lib/types";
 function StatusBadge({ code }: { code: number | null }) {
   if (code === null) return <span className="text-muted-foreground">—</span>;
   const cls =
-    code >= 500 ? "bg-red-950/40 text-red-300"
-    : code >= 400 ? "bg-amber-950/40 text-amber-300"
-    : "bg-green-950/40 text-green-300";
+    code >= 500 ? "bg-destructive/12 text-destructive"
+    : code >= 400 ? "bg-warning/12 text-warning"
+    : "bg-success/12 text-success";
   return <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-mono font-medium ${cls}`}>{code}</span>;
 }
 
 function MethodBadge({ method }: { method: string }) {
   const colors: Record<string, string> = {
-    GET: "text-cyan-300", POST: "text-green-300", PATCH: "text-amber-300",
-    PUT: "text-blue-300", DELETE: "text-red-300",
+    GET: "text-primary", POST: "text-success", PATCH: "text-warning",
+    PUT: "text-chart-5", DELETE: "text-destructive",
   };
   return <span className={`font-mono text-xs font-medium ${colors[method] ?? "text-muted-foreground"}`}>{method}</span>;
 }
@@ -180,7 +180,7 @@ export default function PlatformAuditLogViewer() {
         <button
           onClick={() => void fetch(0)}
           disabled={loading}
-          className="px-3 py-1.5 rounded bg-amber-400 text-black text-sm font-semibold hover:bg-amber-300 disabled:opacity-40 transition-colors"
+          className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-40 transition-colors"
         >
           {loading ? "Loading…" : "Refresh"}
         </button>
@@ -223,7 +223,7 @@ export default function PlatformAuditLogViewer() {
                   <td className="p-3 font-mono text-muted-foreground">{new Date(r.timestamp).toLocaleString()}</td>
                   <td className="p-3">
                     {r.tenant_id ? (
-                      <a href={`/platform/tenants/${r.tenant_id}`} className="text-amber-400 hover:underline" onClick={(e) => e.stopPropagation()}>
+                      <a href={`/platform/tenants/${r.tenant_id}`} className="text-primary hover:underline" onClick={(e) => e.stopPropagation()}>
                         {tenantName(r.tenant_id)}
                       </a>
                     ) : <span className="text-muted-foreground">platform</span>}

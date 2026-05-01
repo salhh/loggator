@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import time
 import boto3
@@ -15,7 +17,9 @@ from loggator.observability import system_event_writer
 from loggator.security.connection_crypto import decrypt_secret
 
 if TYPE_CHECKING:
-    from loggator.db.models import TenantConnection
+    from loggator.db.models import TenantConnection, TenantIntegration
+
+_SEARCH_INTEGRATION_PROVIDERS = frozenset({"opensearch", "elasticsearch", "wazuh_indexer"})
 
 log = structlog.get_logger()
 
@@ -84,6 +88,38 @@ def _connection_row_is_configured(conn: "TenantConnection") -> bool:
     return bool(conn.opensearch_host and str(conn.opensearch_host).strip())
 
 
+def _integration_row_is_search_configured(integ: "TenantIntegration") -> bool:
+    if integ.provider not in _SEARCH_INTEGRATION_PROVIDERS:
+        return False
+    return bool(integ.opensearch_host and str(integ.opensearch_host).strip())
+
+
+def build_opensearch_client_from_integration_row(integ: "TenantIntegration") -> AsyncOpenSearch:
+    """Build AsyncOpenSearch from a TenantIntegration row (search providers only)."""
+    auth = integ.opensearch_auth_type or "none"
+    port = integ.opensearch_port if integ.opensearch_port is not None else settings.opensearch_port
+    use_ssl = integ.opensearch_use_ssl if integ.opensearch_use_ssl is not None else settings.opensearch_use_ssl
+    verify = (
+        integ.opensearch_verify_certs if integ.opensearch_verify_certs is not None else settings.opensearch_verify_certs
+    )
+    pwd = decrypt_secret(integ.opensearch_password) or ""
+    api_key = decrypt_secret(integ.opensearch_api_key) or ""
+    ca = (decrypt_secret(integ.opensearch_ca_certs) or integ.opensearch_ca_certs or "") or ""
+    region = integ.aws_region or settings.aws_region
+    return build_opensearch_client(
+        integ.opensearch_host or settings.opensearch_host,
+        port,
+        auth,
+        use_ssl=use_ssl,
+        verify_certs=verify,
+        ca_certs=ca,
+        username=integ.opensearch_username or "",
+        password=pwd,
+        api_key=api_key,
+        aws_region=region,
+    )
+
+
 def _build_client_from_tenant_row(conn: "TenantConnection") -> AsyncOpenSearch:
     auth = conn.opensearch_auth_type or "none"
     port = conn.opensearch_port if conn.opensearch_port is not None else settings.opensearch_port
@@ -115,6 +151,80 @@ _last_build_failed = False
 _tenant_clients: dict[UUID, AsyncOpenSearch] = {}
 _tenant_client_timestamps: dict[UUID, float] = {}
 _TENANT_CLIENT_TTL = 300.0  # seconds
+
+
+async def _get_search_integration_row(session: AsyncSession, tenant_id: UUID) -> TenantIntegration | None:
+    from loggator.db.models import TenantIntegration
+
+    r = await session.execute(
+        select(TenantIntegration)
+        .where(TenantIntegration.tenant_id == tenant_id, TenantIntegration.is_primary.is_(True))
+        .limit(1)
+    )
+    prim = r.scalar_one_or_none()
+    if prim is not None and _integration_row_is_search_configured(prim):
+        return prim
+    r2 = await session.execute(
+        select(TenantIntegration)
+        .where(TenantIntegration.tenant_id == tenant_id)
+        .order_by(TenantIntegration.created_at.asc())
+    )
+    for row in r2.scalars().all():
+        if _integration_row_is_search_configured(row):
+            return row
+    return None
+
+
+async def get_effective_opensearch_display(session: AsyncSession, tenant_id: UUID) -> dict:
+    """Redacted effective OpenSearch connection for UI: integration > tenant_connection > global defaults."""
+    from loggator.db.models import TenantConnection
+
+    integ = await _get_search_integration_row(session, tenant_id)
+    if integ is not None:
+        return {
+            "configured": True,
+            "source": "integration",
+            "provider": integ.provider,
+            "host": str(integ.opensearch_host or ""),
+            "port": int(integ.opensearch_port) if integ.opensearch_port is not None else int(settings.opensearch_port),
+            "auth_type": str(integ.opensearch_auth_type or settings.opensearch_auth_type or "none"),
+            "use_ssl": bool(integ.opensearch_use_ssl)
+            if integ.opensearch_use_ssl is not None
+            else bool(settings.opensearch_use_ssl),
+            "verify_certs": bool(integ.opensearch_verify_certs)
+            if integ.opensearch_verify_certs is not None
+            else bool(settings.opensearch_verify_certs),
+        }
+
+    result = await session.execute(select(TenantConnection).where(TenantConnection.tenant_id == tenant_id).limit(1))
+    conn = result.scalar_one_or_none()
+    if conn is not None and _connection_row_is_configured(conn):
+        return {
+            "configured": True,
+            "source": "tenant_connection",
+            "provider": "opensearch",
+            "host": str(conn.opensearch_host or ""),
+            "port": int(conn.opensearch_port) if conn.opensearch_port is not None else int(settings.opensearch_port),
+            "auth_type": str(conn.opensearch_auth_type or settings.opensearch_auth_type or "none"),
+            "use_ssl": bool(conn.opensearch_use_ssl)
+            if conn.opensearch_use_ssl is not None
+            else bool(settings.opensearch_use_ssl),
+            "verify_certs": bool(conn.opensearch_verify_certs)
+            if conn.opensearch_verify_certs is not None
+            else bool(settings.opensearch_verify_certs),
+        }
+
+    host = settings.opensearch_host or ""
+    return {
+        "configured": bool(host and str(host).strip()),
+        "source": "global",
+        "provider": "opensearch",
+        "host": str(host),
+        "port": int(settings.opensearch_port),
+        "auth_type": str(settings.opensearch_auth_type or "none"),
+        "use_ssl": bool(settings.opensearch_use_ssl),
+        "verify_certs": bool(settings.opensearch_verify_certs),
+    }
 
 
 def get_client() -> AsyncOpenSearch:
@@ -150,8 +260,25 @@ def get_client() -> AsyncOpenSearch:
 
 
 async def get_opensearch_for_tenant(session: AsyncSession, tenant_id: UUID) -> AsyncOpenSearch:
-    """Return OpenSearch client for ``tenant_id`` (per-tenant connection or global fallback)."""
+    """Return OpenSearch client for ``tenant_id`` (integration > per-tenant connection > global)."""
     from loggator.db.models import TenantConnection
+
+    integ = await _get_search_integration_row(session, tenant_id)
+    if integ is not None:
+        age = time.monotonic() - _tenant_client_timestamps.get(tenant_id, 0.0)
+        if tenant_id not in _tenant_clients or age > _TENANT_CLIENT_TTL:
+            old = _tenant_clients.pop(tenant_id, None)
+            if old is not None:
+                asyncio.create_task(old.close())
+            _tenant_clients[tenant_id] = build_opensearch_client_from_integration_row(integ)
+            _tenant_client_timestamps[tenant_id] = time.monotonic()
+            log.info(
+                "opensearch.tenant_client.created",
+                tenant_id=str(tenant_id),
+                source="integration",
+                refreshed=old is not None,
+            )
+        return _tenant_clients[tenant_id]
 
     result = await session.execute(
         select(TenantConnection).where(TenantConnection.tenant_id == tenant_id).limit(1)
@@ -172,6 +299,10 @@ async def get_opensearch_for_tenant(session: AsyncSession, tenant_id: UUID) -> A
 
 async def get_effective_index_pattern(session: AsyncSession, tenant_id: UUID) -> str:
     from loggator.db.models import TenantConnection
+
+    integ = await _get_search_integration_row(session, tenant_id)
+    if integ is not None and integ.opensearch_index_pattern and str(integ.opensearch_index_pattern).strip():
+        return str(integ.opensearch_index_pattern).strip()
 
     result = await session.execute(
         select(TenantConnection).where(TenantConnection.tenant_id == tenant_id).limit(1)

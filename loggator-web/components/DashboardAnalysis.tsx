@@ -61,8 +61,8 @@ export default function DashboardAnalysis() {
               disabled={loading || refreshing}
               className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
                 hoursBack === p.hours
-                  ? "border-cyan-500 bg-cyan-950/40 text-cyan-300"
-                  : "border-border text-muted-foreground hover:text-foreground hover:border-cyan-500/50"
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:text-foreground hover:border-primary/50"
               } disabled:opacity-40`}
             >
               {p.label}
@@ -72,7 +72,7 @@ export default function DashboardAnalysis() {
             <button
               onClick={() => runAnalysis(hoursBack, true)}
               disabled={loading || refreshing}
-              className="text-[11px] px-2 py-0.5 rounded border border-border text-muted-foreground hover:text-cyan-300 hover:border-cyan-500 transition-colors disabled:opacity-40 ml-1"
+              className="text-[11px] px-2 py-0.5 rounded border border-border text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-40 ml-1"
               title="Re-run analysis"
             >
               ↻
@@ -85,20 +85,20 @@ export default function DashboardAnalysis() {
       {loading && (
         <div className="bg-card border border-border rounded-lg p-6 flex flex-col items-center gap-3 text-muted-foreground">
           <div className="flex gap-1">
-            <span className="h-2 w-2 rounded-full bg-cyan-400 animate-bounce [animation-delay:0ms]" />
-            <span className="h-2 w-2 rounded-full bg-cyan-400 animate-bounce [animation-delay:150ms]" />
-            <span className="h-2 w-2 rounded-full bg-cyan-400 animate-bounce [animation-delay:300ms]" />
+            <span className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
+            <span className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:150ms]" />
+            <span className="h-2 w-2 rounded-full bg-primary animate-bounce [animation-delay:300ms]" />
           </div>
           <span className="text-xs">Analysing logs with Ollama…</span>
         </div>
       )}
 
       {error && !loading && (
-        <div className="bg-card border border-red-900 rounded-lg p-4 space-y-2">
-          <p className="text-xs text-red-400">Analysis failed: {error}</p>
+        <div className="bg-card border border-destructive/40 rounded-lg p-4 space-y-2">
+          <p className="text-xs text-destructive">Analysis failed: {error}</p>
           <button
             onClick={() => runAnalysis(hoursBack, false)}
-            className="text-xs text-cyan-400 hover:underline"
+            className="text-xs text-primary hover:underline"
           >
             Retry
           </button>

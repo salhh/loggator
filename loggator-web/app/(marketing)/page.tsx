@@ -16,19 +16,19 @@ export const metadata: Metadata = {
 export default function MarketingHomePage() {
   return (
     <>
-      <header className="sticky top-0 z-20 border-b border-cyan-400/10 bg-background/70 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-primary/15 bg-background/80 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="text-sm font-bold tracking-widest text-cyan-400 flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-cyan-400 inline-block" />
+          <Link href="/" className="text-sm font-bold tracking-widest text-primary flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-primary inline-block" />
             LOGGATOR
           </Link>
           <div className="flex items-center gap-4">
-            <a href="#pricing" className="text-xs text-muted-foreground hover:text-cyan-300 transition-colors">
+            <a href="#pricing" className="text-xs text-muted-foreground hover:text-primary transition-colors">
               Pricing
             </a>
             <Link
               href="/login"
-              className="text-xs font-semibold rounded-md bg-cyan-400 text-black px-4 py-2 hover:bg-cyan-300"
+              className="text-xs font-semibold rounded-md bg-primary text-primary-foreground px-4 py-2 hover:bg-primary/90"
             >
               Sign in
             </Link>

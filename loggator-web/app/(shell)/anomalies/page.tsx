@@ -27,7 +27,7 @@ const TRIAGE_TABS = [
 ];
 
 const SOURCE_LABELS: Record<string, { label: string; cls: string }> = {
-  llm:  { label: "AI",   cls: "bg-cyan-900/50 text-cyan-300 border-cyan-700" },
+  llm:  { label: "AI",   cls: "bg-primary/15 text-primary border-primary/40" },
   rule: { label: "Rule", cls: "bg-violet-900/50 text-violet-300 border-violet-700" },
   ueba: { label: "UEBA", cls: "bg-amber-900/50 text-amber-300 border-amber-700" },
 };
@@ -80,7 +80,7 @@ export default async function AnomaliesPage({
               href={tabHref({ severity: tab.value, triage: rawTriage, tactic: rawTactic })}
               className={`pb-1.5 text-sm transition-colors border-b-2 ${
                 isActive
-                  ? "border-cyan-400 text-cyan-300 font-semibold"
+                  ? "border-primary text-primary font-semibold"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -104,7 +104,7 @@ export default async function AnomaliesPage({
               href={tabHref({ severity: validSeverity, triage: tab.value, tactic: rawTactic })}
               className={`px-2 py-0.5 rounded text-xs border transition-colors ${
                 isActive
-                  ? "bg-cyan-900/50 text-cyan-300 border-cyan-700"
+                  ? "bg-primary/15 text-primary border-primary/40"
                   : "text-muted-foreground border-border hover:text-foreground hover:border-muted-foreground"
               }`}
             >
@@ -131,7 +131,7 @@ export default async function AnomaliesPage({
         <div className="space-y-2">
           {anomalies.map((a) => (
             <Link key={a.id} href={`/anomalies/${a.id}`} className="block group">
-              <div className="rounded-lg ring-0 group-hover:ring-1 group-hover:ring-cyan-400/30 transition-all">
+              <div className="rounded-lg ring-0 group-hover:ring-1 group-hover:ring-ring/25 transition-all">
                 <AnomalyCard
                   severity={a.severity}
                   summary={a.summary}

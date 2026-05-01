@@ -20,6 +20,8 @@ const baseNav: NavItem[] = [
   { href: "/stats", label: "Statistics" },
   { href: "/chat", label: "Log assistant" },
   { href: "/support", label: "Support" },
+  { href: "/team", label: "Team" },
+  { href: "/settings/integrations", label: "Integrations" },
   { href: "/health", label: "Health" },
   { href: "/settings", label: "Settings" },
 ];
@@ -56,8 +58,8 @@ export default function SidebarNav() {
             href={href}
             className={`px-3 py-2 rounded-md text-sm transition-colors ${
               active
-                ? "border-l-2 border-cyan-400 bg-cyan-950/40 text-cyan-300 pl-[10px]"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm"
+                : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/70"
             }`}
           >
             {label}

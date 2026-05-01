@@ -48,10 +48,10 @@ export default function PlatformOverviewPage() {
         <p className="text-sm text-muted-foreground animate-pulse">Loading…</p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard label="Total Tenants" value={total} borderColor="border-l-amber-400" />
-          <StatCard label="Active" value={active} borderColor="border-l-green-500" />
-          <StatCard label="Suspended" value={suspended} borderColor="border-l-red-500" />
-          <StatCard label="Total Members" value={totalMembers} borderColor="border-l-cyan-400" />
+          <StatCard label="Total Tenants" value={total} borderColor="border-l-warning" />
+          <StatCard label="Active" value={active} borderColor="border-l-success" />
+          <StatCard label="Suspended" value={suspended} borderColor="border-l-destructive" />
+          <StatCard label="Total Members" value={totalMembers} borderColor="border-l-primary" />
         </div>
       )}
 
@@ -60,9 +60,9 @@ export default function PlatformOverviewPage() {
           <Link
             key={s.href}
             href={s.href}
-            className="rounded-lg border border-border bg-card p-4 hover:border-amber-400/50 hover:bg-amber-950/20 transition-colors group"
+            className="rounded-lg border border-border bg-card p-4 hover:border-primary/45 hover:bg-primary/5 transition-colors group"
           >
-            <div className="text-sm font-medium text-foreground group-hover:text-amber-300 transition-colors">{s.label}</div>
+            <div className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">{s.label}</div>
             <div className="text-xs text-muted-foreground mt-1">{s.desc}</div>
           </Link>
         ))}
@@ -83,10 +83,10 @@ export default function PlatformOverviewPage() {
                     <span
                       className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-medium mr-2 ${
                         ev.severity === "error" || ev.severity === "critical"
-                          ? "bg-red-950/40 text-red-300"
+                          ? "bg-destructive/12 text-destructive"
                           : ev.severity === "warning"
-                          ? "bg-amber-950/40 text-amber-300"
-                          : "bg-cyan-950/40 text-cyan-300"
+                          ? "bg-warning/12 text-warning"
+                          : "bg-primary/12 text-primary"
                       }`}
                     >
                       {ev.severity}

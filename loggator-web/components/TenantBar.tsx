@@ -1,26 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { signOut, useSession } from "next-auth/react";
-import {
-  decodeJwtExpiry,
-  setSessionAccessToken,
-  setStoredAccessToken,
-  setStoredTenantId,
-} from "@/lib/auth-headers";
+import Link from "next/link";
+import { decodeJwtExpiry } from "@/lib/auth-headers";
 import { useAuth } from "./AuthProvider";
 
 function useTokenExpiry(token: string | null) {
   const [label, setLabel] = useState<{ text: string; color: string } | null>(null);
   useEffect(() => {
-    if (!token) { setLabel(null); return; }
+    if (!token) {
+      setLabel(null);
+      return;
+    }
     const exp = decodeJwtExpiry(token);
-    if (exp === null) { setLabel(null); return; }
+    if (exp === null) {
+      setLabel(null);
+      return;
+    }
     function refresh() {
       const remaining = exp! - Math.floor(Date.now() / 1000);
-      if (remaining <= 0) setLabel({ text: "Expired", color: "text-red-500" });
-      else if (remaining <= 300) setLabel({ text: "Expires soon", color: "text-amber-500" });
-      else setLabel({ text: `Expires in ${Math.floor(remaining / 60)}m`, color: "text-green-500" });
+      if (remaining <= 0) setLabel({ text: "Expired", color: "text-destructive" });
+      else if (remaining <= 300) setLabel({ text: "Expires soon", color: "text-warning" });
+      else setLabel({ text: `Expires in ${Math.floor(remaining / 60)}m`, color: "text-success" });
     }
     refresh();
     const id = setInterval(refresh, 30_000);
@@ -30,71 +31,44 @@ function useTokenExpiry(token: string | null) {
 }
 
 export default function TenantBar() {
-  const { data: session } = useSession();
-  const { accessToken, tenantId, setTenantId, tenants, tenantsError, authStatus, setAccessToken } =
-    useAuth();
+  const { accessToken, tenantId, setTenantId, tenants, tenantsError, authStatus } = useAuth();
   const hasSession = authStatus === "authenticated" && !!accessToken;
   const expiryLabel = useTokenExpiry(accessToken);
 
-  async function handleLogout() {
-    setStoredAccessToken(null);
-    setStoredTenantId(null);
-    setSessionAccessToken(null);
-    if (session) {
-      if (typeof window !== "undefined") window.location.href = "/logout";
-    }
-    else {
-      setAccessToken(null);
-      if (typeof window !== "undefined") window.location.href = "/login";
-    }
-  }
-
   return (
-    <div className="px-3 py-3 space-y-2 border-b border-border text-xs">
+    <div className="px-3 py-3 space-y-2 border-b border-sidebar-border text-xs">
       {authStatus === "loading" ? (
         <p className="text-muted-foreground">Session…</p>
       ) : hasSession ? (
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <span
-              className="text-muted-foreground truncate"
-              title={session?.user?.email ?? session?.user?.name ?? "Signed in"}
-            >
-              {session?.user?.email || session?.user?.name || "Signed in"}
-            </span>
-            <button
-              type="button"
-              onClick={() => void handleLogout()}
-              className="shrink-0 text-cyan-400 hover:underline"
-            >
-              Log out
-            </button>
-          </div>
           {expiryLabel && (
             <p className={`text-[10px] font-medium ${expiryLabel.color}`}>{expiryLabel.text}</p>
           )}
+          <p className="text-[10px] text-muted-foreground">
+            Tenant and profile controls are in the top bar.
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
-          <a
+          <Link
             href="/login"
-            className="block w-full text-center rounded-md bg-cyan-400 text-black py-1.5 text-xs font-semibold hover:bg-cyan-300"
+            className="block w-full text-center rounded-md bg-primary text-primary-foreground py-1.5 text-xs font-semibold hover:opacity-90"
           >
             Log in
-          </a>
+          </Link>
           <p className="text-[10px] text-muted-foreground">
-            Use SSO or a dev token on the login page (session required to browse the app).
+            SSO or dev token on the login page.
           </p>
         </div>
       )}
 
       {tenants.length > 1 ? (
         <>
-          <label className="block text-muted-foreground pt-1">Tenant</label>
+          <label className="block text-muted-foreground pt-1">Tenant (sidebar)</label>
           <select
             value={tenantId ?? ""}
             onChange={(e) => setTenantId(e.target.value || null)}
-            className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-foreground"
+            className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-foreground text-xs focus-visible:ring-2 focus-visible:ring-ring/80 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <option value="">Select tenant…</option>
             {tenants.map((t) => (
@@ -105,12 +79,12 @@ export default function TenantBar() {
           </select>
         </>
       ) : tenants.length === 1 ? (
-        <p className="text-muted-foreground pt-1 truncate" title={tenants[0].name}>
-          Tenant: {tenants[0].name}
+        <p className="text-muted-foreground pt-1 truncate text-[11px]" title={tenants[0].name}>
+          {tenants[0].name}
         </p>
       ) : hasSession ? (
-        <p className="text-muted-foreground pt-1">
-          {tenantsError ?? "No tenants visible — check membership or token."}
+        <p className="text-muted-foreground pt-1 text-[11px]">
+          {tenantsError ?? "No tenants visible."}
         </p>
       ) : null}
     </div>

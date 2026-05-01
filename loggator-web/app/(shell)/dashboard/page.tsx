@@ -68,25 +68,25 @@ export default async function Dashboard() {
         <StatCard
           label="High severity"
           value={highCount}
-          borderColor="border-l-red-500"
+          borderColor="border-l-destructive"
           sub="anomalies"
         />
         <StatCard
           label="Medium severity"
           value={medCount}
-          borderColor="border-l-amber-500"
+          borderColor="border-l-warning"
           sub="anomalies"
         />
         <StatCard
           label="Total anomalies"
           value={allAnomalies.length}
-          borderColor="border-l-cyan-400"
+          borderColor="border-l-primary"
           sub="last 100 fetched"
         />
         <StatCard
           label="Ollama"
           value={ollamaOk ? "Online" : "Offline"}
-          borderColor={ollamaOk ? "border-l-emerald-500" : "border-l-red-500"}
+          borderColor={ollamaOk ? "border-l-success" : "border-l-destructive"}
           sub="AI model"
         />
       </div>
@@ -103,7 +103,7 @@ export default async function Dashboard() {
               <SectionLabel>Anomaly activity · last 24 h</SectionLabel>
               <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-4 rounded-sm bg-cyan-400/70 inline-block" />
+                  <span className="h-2 w-4 rounded-sm bg-primary/70 inline-block" />
                   Anomalies
                 </span>
                 <span className="flex items-center gap-1.5">
@@ -132,7 +132,7 @@ export default async function Dashboard() {
               </div>
               <p className="text-sm leading-relaxed text-foreground/90">{latestSummary.summary}</p>
               {latestSummary.recommendation && (
-                <p className="text-xs border-l-2 border-cyan-400 pl-3 text-muted-foreground leading-relaxed">
+                <p className="text-xs border-l-2 border-primary pl-3 text-muted-foreground leading-relaxed">
                   {latestSummary.recommendation}
                 </p>
               )}
@@ -150,7 +150,7 @@ export default async function Dashboard() {
                 <SectionLabel>Recent anomalies</SectionLabel>
                 <Link
                   href="/anomalies"
-                  className="text-[11px] text-muted-foreground hover:text-cyan-400 transition-colors"
+                  className="text-[11px] text-muted-foreground hover:text-primary transition-colors"
                 >
                   View all →
                 </Link>

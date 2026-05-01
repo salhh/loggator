@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, type SupportThread, type SupportThreadDetail } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export default function PlatformSupportPage() {
@@ -65,7 +66,7 @@ export default function PlatformSupportPage() {
         <p className="text-sm text-muted-foreground mt-1">Threads from tenants in your organization.</p>
       </div>
       {error && (
-        <div className="rounded-md border border-red-500/40 bg-red-950/30 px-3 py-2 text-sm text-red-200">
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -78,7 +79,7 @@ export default function PlatformSupportPage() {
                   type="button"
                   onClick={() => void openThread(t.id)}
                   className={`w-full text-left px-2 py-1.5 rounded hover:bg-secondary ${
-                    selected?.id === t.id ? "bg-amber-950/40 text-amber-200" : "text-muted-foreground"
+                    selected?.id === t.id ? "bg-accent text-accent-foreground" : "text-muted-foreground"
                   }`}
                 >
                   <span className="block truncate font-medium text-foreground">{t.subject || "(no subject)"}</span>
@@ -109,7 +110,7 @@ export default function PlatformSupportPage() {
                   <div
                     key={m.id}
                     className={`rounded px-2 py-1.5 ${
-                      m.is_staff ? "bg-amber-950/30 text-amber-100 ml-4" : "bg-secondary mr-4"
+                      m.is_staff ? "bg-chart-3/15 text-chart-3 border border-chart-3/25 ml-4" : "bg-secondary mr-4"
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{m.body}</p>
@@ -126,14 +127,9 @@ export default function PlatformSupportPage() {
                   placeholder="Reply as staff…"
                   className="bg-background flex-1"
                 />
-                <button
-                  type="button"
-                  onClick={() => void sendReply()}
-                  disabled={!reply.trim()}
-                  className="rounded-md bg-amber-400 text-black px-3 py-2 text-sm font-semibold disabled:opacity-50"
-                >
+                <Button type="button" onClick={() => void sendReply()} disabled={!reply.trim()}>
                   Send
-                </button>
+                </Button>
               </div>
             </>
           ) : (

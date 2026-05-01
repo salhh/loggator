@@ -35,11 +35,11 @@ export default function LiveFeed() {
       {permanentlyOffline ? (
         <div className="flex items-center gap-2 mb-2">
           <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-          <span className="text-xs text-red-400 flex-1">Live feed disconnected</span>
+          <span className="text-xs text-destructive flex-1">Live feed disconnected</span>
           <button
             type="button"
             onClick={reconnect}
-            className="text-xs text-cyan-400 hover:underline shrink-0"
+            className="text-xs text-primary hover:underline shrink-0"
           >
             Reconnect
           </button>
@@ -47,7 +47,7 @@ export default function LiveFeed() {
       ) : (
         <div className="flex items-center gap-2 mb-2">
           <span
-            className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground"}`}
+            className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-success" : "bg-muted-foreground"}`}
           />
           <span className="text-xs text-muted-foreground">
             {connected ? "connected" : "connecting..."}

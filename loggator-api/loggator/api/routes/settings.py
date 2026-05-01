@@ -6,13 +6,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.config import settings as _settings
-from loggator.db.models import TenantConnection
 from loggator.db.session import get_session
-from loggator.opensearch.client import get_effective_index_pattern
+from loggator.opensearch.client import get_effective_index_pattern, get_effective_opensearch_display
 from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(tags=["settings"])
@@ -118,19 +116,18 @@ async def get_effective_settings(
     This is intended for UI/runtime visibility. It merges tenant connection values with
     process-wide defaults without exposing secrets (passwords, API keys).
     """
-    result = await session.execute(
-        select(TenantConnection).where(TenantConnection.tenant_id == tenant_id).limit(1)
-    )
-    conn = result.scalar_one_or_none()
     index_pattern = await get_effective_index_pattern(session, tenant_id)
+    eff = await get_effective_opensearch_display(session, tenant_id)
 
     opensearch = {
-        "configured": bool(conn and conn.opensearch_host and str(conn.opensearch_host).strip()),
-        "host": str(conn.opensearch_host) if conn and conn.opensearch_host else _settings.opensearch_host,
-        "port": int(conn.opensearch_port) if conn and conn.opensearch_port is not None else int(_settings.opensearch_port),
-        "auth_type": str(conn.opensearch_auth_type) if conn and conn.opensearch_auth_type else str(_settings.opensearch_auth_type),
-        "use_ssl": bool(conn.opensearch_use_ssl) if conn and conn.opensearch_use_ssl is not None else bool(_settings.opensearch_use_ssl),
-        "verify_certs": bool(conn.opensearch_verify_certs) if conn and conn.opensearch_verify_certs is not None else bool(_settings.opensearch_verify_certs),
+        "configured": bool(eff["configured"]),
+        "source": eff["source"],
+        "provider": eff["provider"],
+        "host": str(eff["host"]),
+        "port": int(eff["port"]),
+        "auth_type": str(eff["auth_type"]),
+        "use_ssl": bool(eff["use_ssl"]),
+        "verify_certs": bool(eff["verify_certs"]),
         "index_pattern": str(index_pattern),
     }
 

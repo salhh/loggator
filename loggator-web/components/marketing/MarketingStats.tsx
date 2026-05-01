@@ -11,7 +11,7 @@ export function MarketingStats() {
       <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
         {stats.map((s) => (
           <div key={s.label} className="space-y-1">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-400/80">{s.label}</p>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-primary/80">{s.label}</p>
             <p className="text-lg font-semibold text-foreground">{s.value}</p>
             <p className="text-xs text-muted-foreground leading-snug">{s.hint}</p>
           </div>

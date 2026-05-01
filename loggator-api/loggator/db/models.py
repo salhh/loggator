@@ -68,6 +68,34 @@ class TenantConnection(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
+class TenantIntegration(Base):
+    """Per-tenant log/SIEM integration (OpenSearch, Elasticsearch, Wazuh indexer, etc.)."""
+
+    __tablename__ = "tenant_integrations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(Text, nullable=False)
+    provider = Column(String(32), nullable=False)  # opensearch | elasticsearch | wazuh_indexer | wazuh_api
+    is_primary = Column(Boolean, nullable=False, default=False)
+    extra_config = Column(JSONB, nullable=True)
+    opensearch_host = Column(Text, nullable=True)
+    opensearch_port = Column(Integer, nullable=True)
+    opensearch_auth_type = Column(String(20), nullable=True)
+    opensearch_username = Column(Text, nullable=True)
+    opensearch_password = Column(Text, nullable=True)
+    opensearch_api_key = Column(Text, nullable=True)
+    opensearch_use_ssl = Column(Boolean, nullable=True)
+    opensearch_verify_certs = Column(Boolean, nullable=True)
+    opensearch_ca_certs = Column(Text, nullable=True)
+    aws_region = Column(String(32), nullable=True)
+    opensearch_index_pattern = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_tenant_integration_name"),)
+
+
 class TenantApiKey(Base):
     """Per-tenant API keys (e.g. log ingest). Plaintext is shown only once at creation."""
 

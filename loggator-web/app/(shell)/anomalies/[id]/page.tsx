@@ -11,26 +11,26 @@ function fmt(iso: string) {
 
 const severityConfig = {
   high: {
-    bg: "bg-[#2d1b1b]",
-    border: "border-[#7f1d1d]",
-    text: "text-red-300",
+    bg: "bg-destructive/10",
+    border: "border-destructive/40",
+    text: "text-destructive",
   },
   medium: {
-    bg: "bg-[#292118]",
-    border: "border-[#78350f]",
-    text: "text-amber-300",
+    bg: "bg-warning/10",
+    border: "border-warning/40",
+    text: "text-warning",
   },
   low: {
-    bg: "bg-card",
+    bg: "bg-muted/50",
     border: "border-border",
-    text: "text-gray-300",
+    text: "text-muted-foreground",
   },
 } as const;
 
 const SOURCE_LABELS: Record<string, { label: string; cls: string }> = {
-  llm:  { label: "AI detected",   cls: "bg-cyan-900/50 text-cyan-300 border-cyan-700" },
+  llm:  { label: "AI detected",   cls: "bg-primary/15 text-primary border-primary/40" },
   rule: { label: "Rule match",    cls: "bg-violet-900/50 text-violet-300 border-violet-700" },
-  ueba: { label: "UEBA",          cls: "bg-amber-900/50 text-amber-300 border-amber-700" },
+  ueba: { label: "UEBA",          cls: "bg-warning/12 text-warning border-warning/35" },
 };
 
 export default async function AnomalyDetailPage({
@@ -103,7 +103,7 @@ export default async function AnomalyDetailPage({
               <ol className="space-y-1.5">
                 {anomaly.root_cause_hints.map((hint, i) => (
                   <li key={i} className="flex gap-2 text-sm">
-                    <span className="text-cyan-400 font-semibold shrink-0">{i + 1}.</span>
+                    <span className="text-primary font-semibold shrink-0">{i + 1}.</span>
                     <span>{hint}</span>
                   </li>
                 ))}
@@ -170,7 +170,7 @@ export default async function AnomalyDetailPage({
                 <div className="text-xs text-muted-foreground">Alerted</div>
                 <div
                   className={`text-xs font-semibold ${
-                    anomaly.alerted ? "text-emerald-400" : "text-muted-foreground"
+                    anomaly.alerted ? "text-success" : "text-muted-foreground"
                   }`}
                 >
                   {anomaly.alerted ? "Yes" : "No"}

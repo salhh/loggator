@@ -14,17 +14,17 @@ function fmtRelative(iso: string) {
 }
 
 const STATUS_CONFIG: Record<string, { cls: string; label: string }> = {
-  open:           { cls: "bg-red-900/50 text-red-300 border-red-700",     label: "Open" },
-  investigating:  { cls: "bg-amber-900/50 text-amber-300 border-amber-700", label: "Investigating" },
-  resolved:       { cls: "bg-emerald-900/50 text-emerald-300 border-emerald-700", label: "Resolved" },
-  false_positive: { cls: "bg-zinc-800 text-zinc-400 border-zinc-600",     label: "False Positive" },
+  open:           { cls: "bg-destructive/12 text-destructive border-destructive/35", label: "Open" },
+  investigating:  { cls: "bg-warning/12 text-warning border-warning/35", label: "Investigating" },
+  resolved:       { cls: "bg-success/12 text-success border-success/35", label: "Resolved" },
+  false_positive: { cls: "bg-muted text-muted-foreground border-border", label: "False Positive" },
 };
 
 const SEVERITY_CONFIG: Record<string, string> = {
-  critical: "text-red-300",
-  high:     "text-orange-300",
-  medium:   "text-amber-300",
-  low:      "text-zinc-400",
+  critical: "text-destructive",
+  high:     "text-chart-2",
+  medium:   "text-warning",
+  low:      "text-muted-foreground",
 };
 
 const STATUS_TABS = [
@@ -70,7 +70,7 @@ export default async function IncidentsPage({
               href={tabHref(tab.value)}
               className={`pb-1.5 text-sm transition-colors border-b-2 ${
                 isActive
-                  ? "border-cyan-400 text-cyan-300 font-semibold"
+                  ? "border-primary text-primary font-semibold"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -92,7 +92,7 @@ export default async function IncidentsPage({
             const sevCls = SEVERITY_CONFIG[inc.severity] ?? "";
             return (
               <Link key={inc.id} href={`/incidents/${inc.id}`} className="block group">
-                <div className="rounded-lg border border-border bg-card px-4 py-3 group-hover:ring-1 group-hover:ring-cyan-400/30 transition-all space-y-2">
+                <div className="rounded-lg border border-border bg-card px-4 py-3 group-hover:ring-1 group-hover:ring-ring/25 transition-all space-y-2">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-0.5 min-w-0">
                       <div className="text-sm font-medium text-foreground truncate">{inc.title}</div>

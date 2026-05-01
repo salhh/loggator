@@ -6,7 +6,7 @@ function fmt(iso: string) {
 }
 
 const statusColor: Record<string, string> = {
-  sent: "text-emerald-400",
+  sent: "text-success",
   failed: "text-red-400",
   pending: "text-amber-400",
 };
@@ -53,8 +53,8 @@ export default async function AlertsPage({
             href={ch === "all" ? "/alerts" : `/alerts?channel=${ch}`}
             className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${
               channel === ch
-                ? "bg-cyan-400 text-black"
-                : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-cyan-400/60"
+                ? "bg-primary text-primary-foreground"
+                : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary/60"
             }`}
           >
             {ch}

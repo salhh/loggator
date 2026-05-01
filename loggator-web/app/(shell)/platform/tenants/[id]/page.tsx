@@ -284,10 +284,10 @@ export default function TenantDetailPage() {
       {tab === "Stats" && (
         stats ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="Members" value={stats.member_count} borderColor="border-l-amber-400" />
-            <StatCard label="Anomalies" value={stats.anomaly_count} borderColor="border-l-red-500" />
-            <StatCard label="Summaries" value={stats.summary_count} borderColor="border-l-cyan-400" />
-            <StatCard label="API Keys" value={stats.api_key_count} borderColor="border-l-green-500" />
+            <StatCard label="Members" value={stats.member_count} borderColor="border-l-warning" />
+            <StatCard label="Anomalies" value={stats.anomaly_count} borderColor="border-l-destructive" />
+            <StatCard label="Summaries" value={stats.summary_count} borderColor="border-l-primary" />
+            <StatCard label="API Keys" value={stats.api_key_count} borderColor="border-l-success" />
           </div>
         ) : (
           <p className="text-sm text-muted-foreground animate-pulse">Loading stats…</p>

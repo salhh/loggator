@@ -204,7 +204,7 @@ function GuideModal({ guide, onClose }: { guide: string; onClose: () => void }) 
         <div className="px-5 py-4 space-y-5">
           {g.sections.map((section) => (
             <div key={section.title} className="space-y-2">
-              <div className="text-xs font-semibold text-cyan-400 uppercase tracking-wider">{section.title}</div>
+              <div className="text-xs font-semibold text-primary uppercase tracking-wider">{section.title}</div>
               <ul className="space-y-2">
                 {section.steps.map((step, i) =>
                   typeof step === "string" ? (
@@ -214,7 +214,7 @@ function GuideModal({ guide, onClose }: { guide: string; onClose: () => void }) 
                     </li>
                   ) : (
                     <li key={i}>
-                      <code className="block w-full bg-background border border-border rounded-md px-3 py-2 text-xs font-mono text-cyan-300 break-all">
+                      <code className="block w-full bg-background border border-border rounded-md px-3 py-2 text-xs font-mono text-primary break-all">
                         {step.code}
                       </code>
                     </li>
@@ -234,7 +234,7 @@ function GuideButton({ guide, onOpen }: { guide: string; onOpen: (g: string) => 
     <button
       type="button"
       onClick={() => onOpen(guide)}
-      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-cyan-400 transition-colors border border-border hover:border-cyan-400/60 rounded-md px-2 py-1"
+      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors border border-border hover:border-primary/60 rounded-md px-2 py-1"
       title="How to get this"
     >
       <span className="text-[11px]">?</span> How to get this
@@ -252,10 +252,10 @@ function SecretInput({ value, onChange, isDirty }: { value: string; onChange: (v
         type={show ? "text" : "password"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`font-mono text-sm bg-card border-border flex-1 ${isDirty ? "border-cyan-400" : ""}`}
+        className={`font-mono text-sm bg-card border-border flex-1 ${isDirty ? "border-primary" : ""}`}
       />
       <button type="button" onClick={() => setShow((v) => !v)}
-        className="px-2.5 py-1.5 rounded border border-border text-xs text-muted-foreground hover:text-foreground hover:border-cyan-400 transition-colors shrink-0">
+        className="px-2.5 py-1.5 rounded border border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary transition-colors shrink-0">
         {show ? "Hide" : "Show"}
       </button>
     </div>
@@ -287,11 +287,11 @@ function TestBtn({ channel, loading, result, onTest }: {
   return (
     <div className="flex items-center gap-2 pt-1">
       <button type="button" onClick={onTest} disabled={loading}
-        className="px-3 py-1.5 rounded border border-border text-xs text-muted-foreground hover:text-foreground hover:border-cyan-400 transition-colors disabled:opacity-40">
+        className="px-3 py-1.5 rounded border border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary transition-colors disabled:opacity-40">
         {loading ? "Sending…" : "Send test"}
       </button>
       {result && (
-        <span className={`text-xs ${result.startsWith("✓") ? "text-emerald-400" : "text-red-400"}`}>{result}</span>
+        <span className={`text-xs ${result.startsWith("✓") ? "text-success" : "text-destructive"}`}>{result}</span>
       )}
     </div>
   );
@@ -424,7 +424,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
             onClick={() => setTab(id)}
             className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${
               tab === id
-                ? "text-cyan-400 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-cyan-400"
+                ? "text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -433,7 +433,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
         ))}
         {/* Unsaved indicator lives in the tab bar, always visible */}
         {dirtyCount > 0 && (
-          <span className="ml-auto self-center text-xs text-amber-400 pr-1">
+          <span className="ml-auto self-center text-xs text-warning pr-1">
             {dirtyCount} unsaved change{dirtyCount !== 1 ? "s" : ""}
           </span>
         )}
@@ -448,8 +448,8 @@ export default function SettingsClient({ initial, envFile }: Props) {
               <select
                 value={val("ALERT_SEVERITY_THRESHOLD") || "medium"}
                 onChange={(e) => onChange("ALERT_SEVERITY_THRESHOLD", e.target.value)}
-                className={`w-full bg-background border rounded-md px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-cyan-400 transition-colors ${
-                  isDirty("ALERT_SEVERITY_THRESHOLD") ? "border-cyan-400" : "border-border"
+                className={`w-full bg-background border rounded-md px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-primary transition-colors ${
+                  isDirty("ALERT_SEVERITY_THRESHOLD") ? "border-primary" : "border-border"
                 }`}
               >
                 <option value="low">Low</option>
@@ -460,7 +460,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
             <Field label="Cooldown (minutes)" helper="Minimum gap between alerts for the same index + severity.">
               <Input type="number" min={0} value={val("ALERT_COOLDOWN_MINUTES") || "5"}
                 onChange={(e) => onChange("ALERT_COOLDOWN_MINUTES", e.target.value)}
-                className={`font-mono text-sm bg-card border-border w-28 ${isDirty("ALERT_COOLDOWN_MINUTES") ? "border-cyan-400" : ""}`}
+                className={`font-mono text-sm bg-card border-border w-28 ${isDirty("ALERT_COOLDOWN_MINUTES") ? "border-primary" : ""}`}
               />
             </Field>
           </Card>
@@ -492,7 +492,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
             </Field>
             <Field label="Chat ID" helper="Numeric chat ID (e.g. -1001234567890) or @channelname">
               <Input value={val("TELEGRAM_CHAT_ID")} onChange={(e) => onChange("TELEGRAM_CHAT_ID", e.target.value)}
-                className={`font-mono text-sm bg-card border-border ${isDirty("TELEGRAM_CHAT_ID") ? "border-cyan-400" : ""}`}
+                className={`font-mono text-sm bg-card border-border ${isDirty("TELEGRAM_CHAT_ID") ? "border-primary" : ""}`}
               />
             </Field>
             <TestBtn channel="telegram" loading={!!testLoading["telegram"]} result={testResults["telegram"] ?? ""} onTest={() => testChannel("telegram")} />
@@ -507,19 +507,19 @@ export default function SettingsClient({ initial, envFile }: Props) {
             <div className="grid grid-cols-[1fr_100px] gap-3">
               <Field label="SMTP Host">
                 <Input value={val("SMTP_HOST")} onChange={(e) => onChange("SMTP_HOST", e.target.value)}
-                  className={`font-mono text-sm bg-card border-border ${isDirty("SMTP_HOST") ? "border-cyan-400" : ""}`}
+                  className={`font-mono text-sm bg-card border-border ${isDirty("SMTP_HOST") ? "border-primary" : ""}`}
                 />
               </Field>
               <Field label="Port">
                 <Input value={val("SMTP_PORT")} onChange={(e) => onChange("SMTP_PORT", e.target.value)}
-                  className={`font-mono text-sm bg-card border-border ${isDirty("SMTP_PORT") ? "border-cyan-400" : ""}`}
+                  className={`font-mono text-sm bg-card border-border ${isDirty("SMTP_PORT") ? "border-primary" : ""}`}
                 />
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Username">
                 <Input value={val("SMTP_USERNAME")} onChange={(e) => onChange("SMTP_USERNAME", e.target.value)}
-                  className={`font-mono text-sm bg-card border-border ${isDirty("SMTP_USERNAME") ? "border-cyan-400" : ""}`}
+                  className={`font-mono text-sm bg-card border-border ${isDirty("SMTP_USERNAME") ? "border-primary" : ""}`}
                 />
               </Field>
               <Field label="Password">
@@ -528,12 +528,12 @@ export default function SettingsClient({ initial, envFile }: Props) {
             </div>
             <Field label="From address">
               <Input value={val("ALERT_FROM_EMAIL")} onChange={(e) => onChange("ALERT_FROM_EMAIL", e.target.value)}
-                className={`font-mono text-sm bg-card border-border ${isDirty("ALERT_FROM_EMAIL") ? "border-cyan-400" : ""}`}
+                className={`font-mono text-sm bg-card border-border ${isDirty("ALERT_FROM_EMAIL") ? "border-primary" : ""}`}
               />
             </Field>
             <Field label="Recipients" helper="Comma-separated email addresses">
               <Input value={val("ALERT_EMAIL_TO")} onChange={(e) => onChange("ALERT_EMAIL_TO", e.target.value)}
-                className={`font-mono text-sm bg-card border-border ${isDirty("ALERT_EMAIL_TO") ? "border-cyan-400" : ""}`}
+                className={`font-mono text-sm bg-card border-border ${isDirty("ALERT_EMAIL_TO") ? "border-primary" : ""}`}
               />
             </Field>
             <TestBtn channel="email" loading={!!testLoading["email"]} result={testResults["email"] ?? ""} onTest={() => testChannel("email")} />
@@ -549,7 +549,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
               <div className="flex gap-2">
                 <div className="flex-1">
                   <Input value={val("ALERT_WEBHOOK_URL")} onChange={(e) => onChange("ALERT_WEBHOOK_URL", e.target.value)}
-                    className={`font-mono text-sm bg-card border-border ${isDirty("ALERT_WEBHOOK_URL") ? "border-cyan-400" : ""}`}
+                    className={`font-mono text-sm bg-card border-border ${isDirty("ALERT_WEBHOOK_URL") ? "border-primary" : ""}`}
                   />
                 </div>
               </div>
@@ -569,7 +569,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                   onClick={() => scheduleStatus && updateSchedule({ enabled: !scheduleStatus.enabled })}
                   disabled={scheduleLoading || !scheduleStatus}
                   className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:opacity-40 ${
-                    scheduleStatus?.enabled ? "bg-cyan-400" : "bg-border"
+                    scheduleStatus?.enabled ? "bg-primary" : "bg-border"
                   }`}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
@@ -616,7 +616,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                 }
                 void updateSchedule({ interval_minutes: iv, window_minutes: wv });
               }}
-              className="px-4 py-2 rounded-md bg-cyan-400 text-black text-sm font-semibold hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {scheduleLoading ? "Saving…" : "Apply interval & window"}
             </button>
@@ -630,7 +630,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                 ].map(({ label, value, accent }) => (
                   <div key={label} className="flex items-center justify-between px-3 py-2 text-xs">
                     <span className="text-muted-foreground">{label}</span>
-                    <span className={accent === "success" ? "text-emerald-400" : accent === "failed" ? "text-red-400" : "text-foreground font-mono"}>
+                    <span className={accent === "success" ? "text-success" : accent === "failed" ? "text-destructive" : "text-foreground font-mono"}>
                       {value}
                     </span>
                   </div>
@@ -673,18 +673,18 @@ export default function SettingsClient({ initial, envFile }: Props) {
                     alert(e instanceof Error ? e.message : "Failed to create key");
                   }
                 }}
-                className="px-3 py-2 rounded-md bg-cyan-400 text-black text-sm font-semibold hover:bg-cyan-300 disabled:opacity-40"
+                className="px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-40"
               >
                 Create key
               </button>
             </div>
             {justCreatedKey && (
-              <div className="mt-3 rounded-md border border-amber-500/50 bg-amber-950/30 px-3 py-2 text-xs">
-                <p className="text-amber-200 font-medium mb-1">Copy this secret now — it will not be shown again.</p>
+              <div className="mt-3 rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs">
+                <p className="text-warning-foreground font-medium mb-1">Copy this secret now — it will not be shown again.</p>
                 <code className="break-all text-foreground select-all">{justCreatedKey}</code>
                 <button
                   type="button"
-                  className="block mt-2 text-cyan-400 hover:underline"
+                  className="block mt-2 text-primary hover:underline"
                   onClick={() => setJustCreatedKey(null)}
                 >
                   Dismiss
@@ -705,7 +705,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                   const expiryLabel = isExpired
                     ? <span className="ml-1 px-1 py-0.5 rounded text-[10px] border border-red-700 bg-red-900/40 text-red-300">Expired</span>
                     : expiresSoon
-                    ? <span className="ml-1 px-1 py-0.5 rounded text-[10px] border border-amber-700 bg-amber-900/40 text-amber-300">Expires soon</span>
+                    ? <span className="ml-1 px-1 py-0.5 rounded text-[10px] border border-warning/40 bg-warning/15 text-warning">Expires soon</span>
                     : expiresAt
                     ? <span className="ml-1 text-muted-foreground">· expires {new Date(expiresAt).toLocaleDateString()}</span>
                     : null;
@@ -723,7 +723,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
-                            className="text-amber-400 hover:underline"
+                            className="text-warning hover:underline"
                             onClick={async () => {
                               if (!confirm(`Rotate key "${k.name}"? The old key will stop working immediately.`)) return;
                               try {
@@ -739,7 +739,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                           </button>
                           <button
                             type="button"
-                            className="text-red-400 hover:underline"
+                            className="text-destructive hover:underline"
                             onClick={async () => {
                               if (!confirm(`Revoke key "${k.name}"?`)) return;
                               try {
@@ -815,7 +815,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                   alert(e instanceof Error ? e.message : "Add failed");
                 }
               }}
-              className="px-3 py-2 rounded-md bg-cyan-400 text-black text-sm font-semibold disabled:opacity-40"
+              className="px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 hover:bg-primary/90"
             >
               Add member
             </button>
@@ -849,7 +849,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                     </select>
                     <button
                       type="button"
-                      className="text-red-400 hover:underline"
+                      className="text-destructive hover:underline"
                       onClick={async () => {
                         if (!confirm(`Remove ${m.subject}?`)) return;
                         try {
@@ -886,7 +886,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                   <Input
                     value={dirty[key] ?? value}
                     onChange={(e) => onChange(key, e.target.value)}
-                    className={`font-mono text-sm bg-card border-border ${dirty[key] !== undefined ? "border-cyan-400" : ""}`}
+                    className={`font-mono text-sm bg-card border-border ${dirty[key] !== undefined ? "border-primary" : ""}`}
                   />
                 </div>
               ))}
@@ -899,11 +899,11 @@ export default function SettingsClient({ initial, envFile }: Props) {
         <button
           onClick={save}
           disabled={saving || dirtyCount === 0}
-          className="px-4 py-2 rounded-md bg-cyan-400 text-black text-sm font-semibold hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? "Saving…" : "Save changes"}
         </button>
-        {saved && <span className="text-sm text-emerald-400">✓ Saved</span>}
+        {saved && <span className="text-sm text-success">✓ Saved</span>}
       </div>
     </div>
   );

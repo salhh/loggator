@@ -23,7 +23,7 @@ export default async function SummariesPage() {
         <div className="space-y-3">
           {summaries.map((s) => (
             <Link key={s.id} href={`/summaries/${s.id}`} className="block">
-              <div className="bg-card rounded-lg border border-border p-4 space-y-3 hover:border-cyan-400/40 transition-colors cursor-pointer">
+              <div className="bg-card rounded-lg border border-border p-4 space-y-3 hover:border-primary/40 transition-colors cursor-pointer">
                 <div className="text-xs text-muted-foreground">
                   {fmt(s.window_start)} → {fmt(s.window_end)}
                 </div>
@@ -36,7 +36,7 @@ export default async function SummariesPage() {
                   </ul>
                 )}
                 {s.recommendation && (
-                  <p className="text-xs border-l-2 border-cyan-400 pl-3 text-muted-foreground">
+                  <p className="text-xs border-l-2 border-primary pl-3 text-muted-foreground">
                     {s.recommendation}
                   </p>
                 )}

@@ -3,8 +3,8 @@
 import type { AnomalyEnrichment, EnrichmentResult } from "@/lib/types";
 
 const REPUTATION_CONFIG = {
-  clean:      { cls: "bg-emerald-900/50 text-emerald-300 border-emerald-700", label: "Clean" },
-  suspicious: { cls: "bg-amber-900/50 text-amber-300 border-amber-700",       label: "Suspicious" },
+  clean:      { cls: "bg-success/12 text-success border-success/35", label: "Clean" },
+  suspicious: { cls: "bg-warning/12 text-warning border-warning/35",       label: "Suspicious" },
   malicious:  { cls: "bg-red-900/50 text-red-300 border-red-700",             label: "Malicious" },
   unknown:    { cls: "bg-zinc-800 text-zinc-400 border-zinc-600",              label: "Unknown" },
 };

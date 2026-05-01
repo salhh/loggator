@@ -5,19 +5,19 @@ import { api } from "@/lib/api";
 import type { AuditLogEntry } from "@/lib/types";
 
 const METHOD_COLOR: Record<string, string> = {
-  GET: "text-emerald-400",
-  POST: "text-sky-400",
-  PUT: "text-amber-400",
-  DELETE: "text-red-400",
+  GET: "text-success",
+  POST: "text-chart-5",
+  PUT: "text-warning",
+  DELETE: "text-destructive",
   PATCH: "text-purple-400",
 };
 
 function statusColor(code: number | null): string {
   if (!code) return "text-muted-foreground";
-  if (code < 300) return "text-emerald-400";
-  if (code < 400) return "text-sky-400";
-  if (code < 500) return "text-amber-400";
-  return "text-red-400";
+  if (code < 300) return "text-success";
+  if (code < 400) return "text-chart-5";
+  if (code < 500) return "text-warning";
+  return "text-destructive";
 }
 
 export default function AuditLogTable() {
@@ -81,7 +81,7 @@ export default function AuditLogTable() {
         <button
           onClick={fetchRows}
           disabled={loading}
-          className="text-xs px-3 py-1.5 rounded border border-border text-muted-foreground hover:text-foreground hover:border-cyan-400 transition-colors disabled:opacity-40"
+          className="text-xs px-3 py-1.5 rounded border border-border text-muted-foreground hover:text-foreground hover:border-primary transition-colors disabled:opacity-40"
         >
           {loading ? "Loading…" : "Refresh"}
         </button>

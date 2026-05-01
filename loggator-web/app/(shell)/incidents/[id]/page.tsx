@@ -12,7 +12,7 @@ function fmt(iso: string) {
 const STATUS_CONFIG: Record<string, { cls: string; label: string }> = {
   open:           { cls: "bg-red-900/50 text-red-300 border-red-700",         label: "Open" },
   investigating:  { cls: "bg-amber-900/50 text-amber-300 border-amber-700",   label: "Investigating" },
-  resolved:       { cls: "bg-emerald-900/50 text-emerald-300 border-emerald-700", label: "Resolved" },
+  resolved:       { cls: "bg-success/12 text-success border-success/35", label: "Resolved" },
   false_positive: { cls: "bg-zinc-800 text-zinc-400 border-zinc-600",         label: "False Positive" },
 };
 
@@ -82,7 +82,7 @@ export default async function IncidentDetailPage({
                   <Link
                     key={aid}
                     href={`/anomalies/${aid}`}
-                    className="block font-mono text-xs text-cyan-400 hover:underline"
+                    className="block font-mono text-xs text-primary hover:underline"
                   >
                     {aid}
                   </Link>

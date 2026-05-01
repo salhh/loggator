@@ -3,13 +3,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.config import settings
-from loggator.db.models import TenantConnection
 from loggator.db.session import get_session
-from loggator.opensearch.client import get_effective_index_pattern
+from loggator.opensearch.client import get_effective_index_pattern, get_effective_opensearch_display
 from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(tags=["runtime"])
@@ -51,20 +49,15 @@ async def get_runtime(
     session: AsyncSession = Depends(get_session),
     tenant_id: UUID = Depends(get_effective_tenant_id),
 ):
-    result = await session.execute(
-        select(TenantConnection).where(TenantConnection.tenant_id == tenant_id).limit(1)
-    )
-    conn = result.scalar_one_or_none()
-
-    configured = bool(conn and conn.opensearch_host and str(conn.opensearch_host).strip())
+    eff = await get_effective_opensearch_display(session, tenant_id)
+    configured = bool(eff["configured"])
     index_pattern = await get_effective_index_pattern(session, tenant_id)
 
-    # Render a redacted "effective" view (never return passwords/api keys).
-    host = (conn.opensearch_host if conn and conn.opensearch_host else settings.opensearch_host) or ""
-    port = int(conn.opensearch_port) if conn and conn.opensearch_port is not None else int(settings.opensearch_port)
-    auth_type = (conn.opensearch_auth_type if conn and conn.opensearch_auth_type else settings.opensearch_auth_type) or "none"
-    use_ssl = bool(conn.opensearch_use_ssl) if conn and conn.opensearch_use_ssl is not None else bool(settings.opensearch_use_ssl)
-    verify_certs = bool(conn.opensearch_verify_certs) if conn and conn.opensearch_verify_certs is not None else bool(settings.opensearch_verify_certs)
+    host = str(eff["host"])
+    port = int(eff["port"])
+    auth_type = str(eff["auth_type"])
+    use_ssl = bool(eff["use_ssl"])
+    verify_certs = bool(eff["verify_certs"])
 
     # Scheduler next run (best-effort).
     next_run_at = None

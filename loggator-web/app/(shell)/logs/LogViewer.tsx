@@ -7,21 +7,21 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 const LEVELS = ["INFO", "WARN", "WARNING", "ERROR", "CRITICAL", "DEBUG"];
 
 const levelColor: Record<string, string> = {
-  ERROR:    "text-red-400 bg-red-950/40 border-red-900",
-  CRITICAL: "text-red-300 bg-red-950/60 border-red-800",
-  WARN:     "text-amber-400 bg-amber-950/40 border-amber-900",
-  WARNING:  "text-amber-400 bg-amber-950/40 border-amber-900",
-  INFO:     "text-cyan-400 bg-cyan-950/20 border-cyan-900/40",
-  DEBUG:    "text-gray-400 bg-gray-900/30 border-gray-700",
+  ERROR:    "text-destructive bg-destructive/10 border-destructive/40",
+  CRITICAL: "text-destructive bg-destructive/15 border-destructive/50",
+  WARN:     "text-warning bg-warning/10 border-warning/35",
+  WARNING:  "text-warning bg-warning/10 border-warning/35",
+  INFO:     "text-chart-1 bg-chart-1/10 border-chart-1/30",
+  DEBUG:    "text-muted-foreground bg-muted border-border",
 };
 
 const levelDot: Record<string, string> = {
-  ERROR:    "bg-red-500",
-  CRITICAL: "bg-red-400",
-  WARN:     "bg-amber-500",
-  WARNING:  "bg-amber-500",
-  INFO:     "bg-cyan-400",
-  DEBUG:    "bg-gray-500",
+  ERROR:    "bg-destructive",
+  CRITICAL: "bg-destructive",
+  WARN:     "bg-warning",
+  WARNING:  "bg-warning",
+  INFO:     "bg-chart-1",
+  DEBUG:    "bg-muted-foreground",
 };
 
 interface LogEntry {
@@ -127,7 +127,7 @@ export default function LogViewer() {
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <span className="text-muted-foreground ml-1">↕</span>;
-    return <span className="text-cyan-400 ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
+    return <span className="text-primary ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
   };
 
   const totalPages = Math.ceil(total / LIMIT);
@@ -144,12 +144,12 @@ export default function LogViewer() {
             placeholder="Search messages..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="flex-1 bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-400 transition-colors"
+            className="flex-1 bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
           />
           <select
             value={indexFilter}
             onChange={(e) => setIndexFilter(e.target.value)}
-            className="bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-cyan-400 transition-colors min-w-[160px]"
+            className="bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-primary transition-colors min-w-[160px]"
           >
             <option value="">All indices</option>
             {indices.map((idx) => (
@@ -161,7 +161,7 @@ export default function LogViewer() {
             placeholder="Service..."
             value={serviceFilter}
             onChange={(e) => setServiceFilter(e.target.value)}
-            className="w-36 bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-cyan-400 transition-colors"
+            className="w-36 bg-background border border-border rounded-md px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
           />
         </div>
 
@@ -175,7 +175,7 @@ export default function LogViewer() {
               className={`px-2 py-0.5 rounded text-xs font-mono font-semibold border transition-colors ${
                 levelFilter.includes(lvl)
                   ? (levelColor[lvl] ?? "text-foreground bg-card border-border")
-                  : "text-muted-foreground border-border hover:border-cyan-400/50"
+                  : "text-muted-foreground border-border hover:border-primary/50"
               }`}
             >
               {lvl}
@@ -197,7 +197,7 @@ export default function LogViewer() {
 
       {/* Error */}
       {error && (
-        <div className="text-sm text-red-400 bg-red-950/40 border border-red-900 rounded-md px-3 py-2">
+        <div className="text-sm text-destructive bg-destructive/10 border border-destructive/40 rounded-md px-3 py-2">
           {error}
         </div>
       )}
@@ -237,10 +237,10 @@ export default function LogViewer() {
             const lvl = (log.level ?? "INFO").toUpperCase();
             const dotClass = levelDot[lvl] ?? "bg-gray-500";
             const rowClass = lvl === "ERROR" || lvl === "CRITICAL"
-              ? "hover:bg-red-950/20"
+              ? "hover:bg-destructive/5"
               : lvl === "WARN" || lvl === "WARNING"
-              ? "hover:bg-amber-950/20"
-              : "hover:bg-white/[0.02]";
+              ? "hover:bg-warning/5"
+              : "hover:bg-muted/40";
 
             return (
               <div
@@ -253,9 +253,9 @@ export default function LogViewer() {
                 <div className="px-3 py-1.5 flex items-center gap-1.5">
                   <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotClass}`} />
                   <span className={
-                    lvl === "ERROR" || lvl === "CRITICAL" ? "text-red-400"
-                    : lvl === "WARN" || lvl === "WARNING" ? "text-amber-400"
-                    : lvl === "INFO" ? "text-cyan-400"
+                    lvl === "ERROR" || lvl === "CRITICAL" ? "text-destructive"
+                    : lvl === "WARN" || lvl === "WARNING" ? "text-warning"
+                    : lvl === "INFO" ? "text-chart-1"
                     : "text-muted-foreground"
                   }>
                     {lvl}
@@ -286,28 +286,28 @@ export default function LogViewer() {
             <button
               onClick={() => fetchLogs(0)}
               disabled={currentPage === 1}
-              className="px-2 py-1 rounded border border-border hover:border-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-2 py-1 rounded border border-border hover:border-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               «
             </button>
             <button
               onClick={() => fetchLogs(Math.max(0, offset - LIMIT))}
               disabled={currentPage === 1}
-              className="px-2 py-1 rounded border border-border hover:border-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-2 py-1 rounded border border-border hover:border-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               ‹ Prev
             </button>
             <button
               onClick={() => fetchLogs(offset + LIMIT)}
               disabled={currentPage === totalPages}
-              className="px-2 py-1 rounded border border-border hover:border-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-2 py-1 rounded border border-border hover:border-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Next ›
             </button>
             <button
               onClick={() => fetchLogs((totalPages - 1) * LIMIT)}
               disabled={currentPage === totalPages}
-              className="px-2 py-1 rounded border border-border hover:border-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="px-2 py-1 rounded border border-border hover:border-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               »
             </button>

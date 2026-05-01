@@ -29,11 +29,11 @@ export default function SidebarStatus() {
   return (
     <div className="flex flex-col gap-2 px-3 py-3 border-t border-border text-xs text-muted-foreground">
       <div className="flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 rounded-full ${streaming ? "bg-emerald-500" : "bg-red-500"}`} />
+        <span className={`h-1.5 w-1.5 rounded-full ${streaming ? "bg-success" : "bg-destructive"}`} />
         Streaming
       </div>
       <div className="flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 rounded-full ${ollama ? "bg-emerald-500" : "bg-red-500"}`} />
+        <span className={`h-1.5 w-1.5 rounded-full ${ollama ? "bg-success" : "bg-destructive"}`} />
         Ollama
       </div>
     </div>

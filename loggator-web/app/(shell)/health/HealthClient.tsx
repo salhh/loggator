@@ -52,7 +52,7 @@ export default function HealthClient() {
   const tabClass = (t: Tab) =>
     `px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
       tab === t
-        ? "border-cyan-400 text-foreground"
+        ? "border-primary text-foreground"
         : "border-transparent text-muted-foreground hover:text-foreground"
     }`;
 
@@ -70,7 +70,7 @@ export default function HealthClient() {
             fetchData();
           }}
           disabled={loading}
-          className="px-3 py-1.5 rounded border border-border text-xs text-muted-foreground hover:text-foreground hover:border-cyan-400 transition-colors disabled:opacity-40"
+          className="px-3 py-1.5 rounded border border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary transition-colors disabled:opacity-40"
         >
           {loading ? "Refreshing…" : "Refresh"}
         </button>

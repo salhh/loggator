@@ -295,3 +295,22 @@ export interface TenantConnection {
   aws_region: string | null;
   opensearch_index_pattern: string | null;
 }
+
+export interface TenantIntegration {
+  id: string;
+  tenant_id: string;
+  name: string;
+  provider: string;
+  is_primary: boolean;
+  extra_config: Record<string, unknown> | null;
+  opensearch_host: string | null;
+  opensearch_port: number | null;
+  opensearch_auth_type: string | null;
+  opensearch_username: string | null;
+  opensearch_use_ssl: boolean | null;
+  opensearch_verify_certs: boolean | null;
+  aws_region: string | null;
+  opensearch_index_pattern: string | null;
+  created_at: string;
+  updated_at: string;
+}

@@ -63,7 +63,7 @@ export function FeatureBento() {
   return (
     <section id="features" className="px-4 py-20 max-w-6xl mx-auto scroll-mt-20">
       <div className="mb-12 max-w-2xl">
-        <p className="text-[10px] font-mono uppercase tracking-widest text-cyan-400/90 mb-2">Capabilities</p>
+        <p className="text-[10px] font-mono uppercase tracking-widest text-primary/90 mb-2">Capabilities</p>
         <h2 className="text-3xl md:text-4xl font-bold text-foreground">Built for defenders</h2>
         <p className="mt-3 text-muted-foreground">
           Everything you need to turn raw logs into actionable security signal—without bolting on five tools.
@@ -75,10 +75,10 @@ export function FeatureBento() {
           return (
             <div
               key={f.title}
-              className={`group rounded-xl border border-cyan-400/15 bg-card/40 backdrop-blur-md p-5 hover:border-cyan-400/35 hover:shadow-[0_0_32px_-12px_rgba(34,211,238,0.25)] transition-all duration-300 ${f.className}`}
+              className={`group rounded-xl border border-primary/15 bg-card/40 backdrop-blur-md p-5 hover:border-primary/35 hover:shadow-lg hover:shadow-primary/10 transition-all duration-300 ${f.className}`}
             >
               <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/10 p-2 text-cyan-300">
+                <div className="rounded-lg border border-primary/25 bg-primary/10 p-2 text-primary">
                   <Icon className="h-5 w-5" />
                 </div>
                 <div className="flex flex-wrap gap-1 justify-end">

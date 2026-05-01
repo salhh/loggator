@@ -21,7 +21,7 @@ function StatusBadge({ status }: { status: "success" | "failed" }) {
     <span
       className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${
         status === "success"
-          ? "border-emerald-800 bg-emerald-950/40 text-emerald-400"
+          ? "border-success/40 bg-success/10 text-success"
           : "border-red-900 bg-red-950/40 text-red-400"
       }`}
     >
@@ -33,7 +33,7 @@ function StatusBadge({ status }: { status: "success" | "failed" }) {
 function ReportCard({ r }: { r: ScheduledAnalysis }) {
   return (
     <Link href={`/reports/${r.id}`} className="block group">
-      <div className="bg-card border border-border rounded-lg p-4 space-y-3 hover:border-cyan-400/40 transition-colors cursor-pointer">
+      <div className="bg-card border border-border rounded-lg p-4 space-y-3 hover:border-primary/40 transition-colors cursor-pointer">
         {/* Header row */}
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-0.5">
@@ -113,7 +113,7 @@ export default async function ReportsPage() {
           <p className="text-sm text-muted-foreground">No scheduled analyses yet.</p>
           <p className="text-xs text-muted-foreground">
             Enable scheduled analysis in{" "}
-            <Link href="/settings" className="text-cyan-400 hover:underline">
+            <Link href="/settings" className="text-primary hover:underline">
               Settings → RCA Schedule
             </Link>{" "}
             to start automatically analyzing your logs.

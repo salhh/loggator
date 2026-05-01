@@ -8,7 +8,7 @@ const SERVICES = ["llm", "opensearch", "postgres", "scheduler", "alerts", "strea
 const SEVERITIES = ["info", "warning", "error", "critical"];
 
 const SEVERITY_BADGE: Record<string, string> = {
-  info: "bg-sky-400/10 text-sky-400 border border-sky-400/20",
+  info: "bg-chart-5/10 text-chart-5 border border-chart-5/25",
   warning: "bg-amber-400/10 text-amber-400 border border-amber-400/20",
   error: "bg-red-400/10 text-red-400 border border-red-400/20",
   critical: "bg-purple-400/10 text-purple-400 border border-purple-400/20",
@@ -32,7 +32,7 @@ function EventRow({ event }: { event: SystemEvent }) {
         >
           {event.severity}
         </span>
-        <span className="text-xs text-cyan-400 bg-cyan-400/10 px-1.5 py-0.5 rounded shrink-0">
+        <span className="text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded shrink-0">
           {event.service}
         </span>
         <span className="text-sm text-foreground leading-snug flex-1 min-w-0">

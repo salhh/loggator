@@ -49,8 +49,8 @@ export default async function StatsPage({
               href={`/stats?days=${d}`}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 days === d
-                  ? "bg-cyan-400 text-black"
-                  : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-cyan-400/60"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary/60"
               }`}
             >
               {d}d
@@ -64,7 +64,7 @@ export default async function StatsPage({
         <StatCard
           label="Summaries"
           value={stats.totals.summaries}
-          borderColor="border-l-cyan-400"
+          borderColor="border-l-primary"
           sub={`last ${days} days`}
         />
         <StatCard
@@ -76,7 +76,7 @@ export default async function StatsPage({
         <StatCard
           label="Alerts Sent"
           value={stats.totals.alerts_sent}
-          borderColor="border-l-emerald-400"
+          borderColor="border-l-success"
           sub={`last ${days} days`}
         />
         <StatCard
@@ -93,7 +93,7 @@ export default async function StatsPage({
           <span className="text-sm font-medium">Daily Activity</span>
           <div className="flex gap-4 ml-auto text-xs text-muted-foreground flex-wrap">
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 inline-block" />
+              <span className="w-2 h-2 rounded-full bg-primary inline-block" />
               Summaries
             </span>
             <span className="flex items-center gap-1.5">
@@ -173,7 +173,7 @@ export default async function StatsPage({
         <div className="bg-card rounded-lg border border-border p-4">
           <span className="text-sm font-medium block mb-3">Anomalies by Severity</span>
           <div className="flex gap-3 flex-wrap">
-            <span className="px-3 py-1.5 rounded-md bg-emerald-400/10 text-emerald-400 text-sm font-medium border border-emerald-400/20">
+            <span className="px-3 py-1.5 rounded-md bg-success/10 text-success text-sm font-medium border border-success/25">
               Low — {stats.anomalies_by_severity.low}
             </span>
             <span className="px-3 py-1.5 rounded-md bg-amber-400/10 text-amber-400 text-sm font-medium border border-amber-400/20">

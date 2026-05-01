@@ -9,12 +9,12 @@ const TACTIC_COLORS: Record<string, string> = {
   "defense evasion": "bg-purple-900/60 text-purple-300 border-purple-700",
   "credential access": "bg-pink-900/60 text-pink-300 border-pink-700",
   "discovery": "bg-blue-900/60 text-blue-300 border-blue-700",
-  "lateral movement": "bg-cyan-900/60 text-cyan-300 border-cyan-700",
-  "collection": "bg-teal-900/60 text-teal-300 border-teal-700",
+  "lateral movement": "bg-chart-1/18 text-chart-1 border-chart-1/35",
+  "collection": "bg-chart-4/18 text-chart-4 border-chart-4/35",
   "command and control": "bg-indigo-900/60 text-indigo-300 border-indigo-700",
   "exfiltration": "bg-rose-900/60 text-rose-300 border-rose-700",
   "impact": "bg-red-950/80 text-red-200 border-red-600",
-  "reconnaissance": "bg-sky-900/60 text-sky-300 border-sky-700",
+  "reconnaissance": "bg-chart-5/18 text-chart-5 border-chart-5/35",
   "resource development": "bg-violet-900/60 text-violet-300 border-violet-700",
 };
 

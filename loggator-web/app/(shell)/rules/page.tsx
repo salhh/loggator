@@ -6,7 +6,7 @@ import RulesClient from "./RulesClient";
 const SEVERITY_CLS: Record<string, string> = {
   critical: "text-red-300",
   high:     "text-orange-300",
-  medium:   "text-amber-300",
+  medium:   "text-warning",
   low:      "text-zinc-400",
 };
 
@@ -41,7 +41,7 @@ export default async function RulesPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-0.5 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${rule.enabled ? "bg-emerald-400" : "bg-zinc-600"}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${rule.enabled ? "bg-success" : "bg-muted-foreground"}`} />
                     <span className="text-sm font-medium text-foreground">{rule.name}</span>
                     <span className={`text-xs font-semibold uppercase ${SEVERITY_CLS[rule.severity] ?? ""}`}>
                       {rule.severity}

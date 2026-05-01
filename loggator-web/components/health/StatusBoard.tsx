@@ -47,15 +47,15 @@ function ServiceCard({
 }) {
   const dotColor =
     dot === "error"
-      ? "bg-red-400"
+      ? "bg-destructive"
       : dot === "degraded"
-      ? "bg-amber-400"
-      : "bg-emerald-400";
+      ? "bg-warning"
+      : "bg-success";
   const borderColor =
     dot === "error"
-      ? "border-red-500/40"
+      ? "border-destructive/40"
       : dot === "degraded"
-      ? "border-amber-400/30"
+      ? "border-warning/35"
       : "border-border";
 
   return (
