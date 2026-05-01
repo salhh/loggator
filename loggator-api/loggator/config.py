@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, SecretStr
-from typing import Literal
+from typing import Literal, Optional
+from uuid import UUID
 
 
 class Settings(BaseSettings):
@@ -83,10 +84,15 @@ class Settings(BaseSettings):
     # Auth (OIDC/JWT)
     auth_disabled: bool = True  # dev default; set false in real deployments
     auto_provision_default_tenant: bool = True  # assign new users to bootstrap tenant on first login
+    # When auth_disabled, optional operator tenant for testing MSP-scoped routes in dev.
+    dev_operator_tenant_id: Optional[UUID] = None
     oidc_issuer: str = ""
     oidc_audience: str = ""
     oidc_jwks_url: str = ""
     dev_jwt_secret: SecretStr = SecretStr("")  # optional HS256 dev-only secret
+    # Optional: create/update a password user on API startup (local / docker dev). Requires dev_jwt_secret.
+    bootstrap_local_admin_email: str = ""
+    bootstrap_local_admin_password: SecretStr = SecretStr("")
 
     # Tenant connection secrets at rest (generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
     connection_secrets_fernet_key: SecretStr = SecretStr("")

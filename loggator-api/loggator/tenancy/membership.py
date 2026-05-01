@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.auth.schemas import UserClaims
 from loggator.db.models import Membership, Tenant, User
+from loggator.tenancy.msp_scope import is_msp_admin, is_platform_superadmin
 
 
 async def get_or_create_user(session: AsyncSession, subject: str, email: str | None) -> tuple[User, bool]:
@@ -49,8 +50,14 @@ async def get_internal_user_id(session: AsyncSession, subject: str) -> UUID | No
 
 
 async def user_can_access_tenant(session: AsyncSession, user: UserClaims, tenant_id: UUID) -> bool:
-    if "platform_admin" in (user.platform_roles or []):
+    if is_platform_superadmin(user):
         return True
+    if is_msp_admin(user) and user.operator_tenant_id:
+        t = await session.get(Tenant, tenant_id)
+        if t is None or t.deleted_at is not None:
+            return False
+        if t.id == user.operator_tenant_id or t.parent_tenant_id == user.operator_tenant_id:
+            return True
     uid = await get_internal_user_id(session, user.user_id)
     if uid is None:
         return False
@@ -75,8 +82,14 @@ async def get_membership_for_subject(
 async def subject_has_tenant_role(
     session: AsyncSession, user: UserClaims, tenant_id: UUID, roles: set[str]
 ) -> bool:
-    if "platform_admin" in (user.platform_roles or []):
+    if is_platform_superadmin(user):
         return True
+    if is_msp_admin(user) and user.operator_tenant_id:
+        t = await session.get(Tenant, tenant_id)
+        if t and t.deleted_at is None:
+            op = user.operator_tenant_id
+            if t.id == op or t.parent_tenant_id == op:
+                return True
     m = await get_membership_for_subject(session, user.user_id, tenant_id)
     if m is None:
         return False

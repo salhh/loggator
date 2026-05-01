@@ -18,6 +18,9 @@ class Tenant(Base):
     name = Column(Text, nullable=False)
     slug = Column(String(64), nullable=False, unique=True, index=True)
     status = Column(String(20), nullable=False, default="active")  # active | suspended
+    parent_tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=True, index=True)
+    is_operator = Column(Boolean, nullable=False, default=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -28,6 +31,7 @@ class User(Base):
     subject = Column(String(255), nullable=False, unique=True, index=True)  # OIDC sub
     email = Column(String(255), nullable=False, default="")
     display_name = Column(String(255), nullable=True)
+    password_hash = Column(Text, nullable=True)  # bcrypt, local login only
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -37,7 +41,7 @@ class Membership(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True)
-    role = Column(String(32), nullable=False)  # platform_admin | tenant_admin | tenant_member
+    role = Column(String(32), nullable=False)  # platform_admin | msp_admin | tenant_admin | tenant_member
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (UniqueConstraint("user_id", "tenant_id", name="uq_membership_user_tenant"),)
@@ -316,3 +320,28 @@ class ThreatIndicator(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (UniqueConstraint("ioc_type", "value", name="uq_threat_indicator_type_value"),)
+
+
+class SupportThread(Base):
+    __tablename__ = "support_threads"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    operator_tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    assigned_to_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String(20), nullable=False, default="open")  # open | pending | resolved | closed
+    subject = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SupportMessage(Base):
+    __tablename__ = "support_messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    thread_id = Column(UUID(as_uuid=True), ForeignKey("support_threads.id", ondelete="CASCADE"), nullable=False, index=True)
+    author_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    body = Column(Text, nullable=False)
+    is_staff = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

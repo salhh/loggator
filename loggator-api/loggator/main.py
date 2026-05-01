@@ -42,7 +42,9 @@ from loggator.api.routes import tenant_members as tenant_members_routes
 from loggator.api.routes import platform_users as platform_users_routes
 from loggator.api.routes import platform_billing as platform_billing_routes
 from loggator.api.routes import platform_audit_log as platform_audit_log_routes
+from loggator.api.routes import support as support_routes
 from loggator.api.routes import auth_info as auth_info_routes
+from loggator.api.routes import auth_login as auth_login_routes
 from loggator.api.routes import incidents as incidents_routes
 from loggator.api.routes import detection_rules as detection_rules_routes
 from loggator.api import websocket
@@ -66,7 +68,16 @@ limiter = Limiter(key_func=_real_client_ip, default_limits=[settings.api_rate_li
 async def lifespan(app: FastAPI):
     from loggator.pipelines.scheduler import start_scheduler, stop_scheduler
     from loggator.opensearch.client import close_all_clients
+    from loggator.auth.local_password import ensure_bootstrap_password_admin
+    from loggator.db.session import AsyncSessionLocal
+
     log.info("loggator.startup", host=settings.api_host, port=settings.api_port)
+    try:
+        async with AsyncSessionLocal() as session:
+            await ensure_bootstrap_password_admin(session)
+            await session.commit()
+    except Exception as e:
+        log.warning("bootstrap_local_admin_skipped", error=str(e))
     start_scheduler()
     yield
     stop_scheduler()
@@ -99,6 +110,7 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(AuditLogMiddleware)
 
 app.include_router(auth_info_routes.router, prefix="/api/v1")
+app.include_router(auth_login_routes.router, prefix="/api/v1")
 app.include_router(status.router, prefix="/api/v1")
 app.include_router(runtime.router, prefix="/api/v1")
 app.include_router(summaries.router, prefix="/api/v1")
@@ -123,6 +135,8 @@ app.include_router(tenant_members_routes.router, prefix="/api/v1")
 app.include_router(platform_users_routes.router, prefix="/api/v1")
 app.include_router(platform_billing_routes.router, prefix="/api/v1")
 app.include_router(platform_audit_log_routes.router, prefix="/api/v1")
+app.include_router(support_routes.router, prefix="/api/v1")
+app.include_router(support_routes.platform_router, prefix="/api/v1")
 app.include_router(incidents_routes.router, prefix="/api/v1")
 app.include_router(detection_rules_routes.router, prefix="/api/v1")
 app.include_router(websocket.router)

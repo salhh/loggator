@@ -47,6 +47,10 @@ async def require_auth(
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
+    from loggator.tenancy.msp_scope import enrich_user_msp_from_db
+
+    user = await enrich_user_msp_from_db(session, user)
+
     # Make claims available to middleware (audit log actor fields).
     request.state.user_claims = user
 
@@ -74,6 +78,28 @@ async def require_current_tenant(
 
 
 def require_platform_admin(user: Annotated[Optional[UserClaims], Depends(require_auth)]) -> UserClaims:
+    if settings.auth_disabled:
+        return user or UserClaims(user_id="dev-platform", email="dev@local", platform_roles=["platform_admin"])
+    if user is None or "platform_admin" not in (user.platform_roles or []):
+        raise HTTPException(status_code=403, detail="platform_admin required")
+    return user
+
+
+def require_platform_or_msp(user: Annotated[Optional[UserClaims], Depends(require_auth)]) -> UserClaims:
+    """Global platform admin or MSP admin (scoped to operator_tenant_id)."""
+    if settings.auth_disabled:
+        return user or UserClaims(user_id="dev-platform", email="dev@local", platform_roles=["platform_admin"])
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    if "platform_admin" in (user.platform_roles or []):
+        return user
+    if "msp_admin" in (user.platform_roles or []) and user.operator_tenant_id:
+        return user
+    raise HTTPException(status_code=403, detail="platform_admin or msp_admin required")
+
+
+def require_platform_superadmin(user: Annotated[Optional[UserClaims], Depends(require_auth)]) -> UserClaims:
+    """Deployment-wide platform admin only (not MSP-scoped)."""
     if settings.auth_disabled:
         return user or UserClaims(user_id="dev-platform", email="dev@local", platform_roles=["platform_admin"])
     if user is None or "platform_admin" not in (user.platform_roles or []):

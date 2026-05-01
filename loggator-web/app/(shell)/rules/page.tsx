@@ -51,7 +51,9 @@ export default async function RulesPage() {
                     <p className="text-xs text-muted-foreground pl-3.5">{rule.description}</p>
                   )}
                   <div className="pl-3.5 font-mono text-xs text-muted-foreground">
-                    <span className="text-zinc-500">{rule.condition.type}</span>
+                    <span className="text-zinc-500">
+                      {rule.condition.type != null ? String(rule.condition.type) : ""}
+                    </span>
                     {" · "}
                     {rule.condition.field as string}
                     {rule.condition.op ? ` ${rule.condition.op as string}` : ""}

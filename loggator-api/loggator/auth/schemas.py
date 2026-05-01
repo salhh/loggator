@@ -23,3 +23,8 @@ class UserClaims(BaseModel):
     # Tenant context: either a single tenant_id claim, or multiple tenant_ids.
     tenant_id: Optional[UUID] = Field(default=None, description="Active tenant ID (single-tenant token)")
     tenant_ids: list[UUID] = Field(default_factory=list, description="Tenants this principal can access")
+
+    # MSP: set when user has msp_admin on an operator tenant (JWT + optional DB hydration).
+    operator_tenant_id: Optional[UUID] = Field(default=None, description="Operator tenant this MSP admin manages")
+    operator_tenant_name: Optional[str] = Field(default=None, description="Enriched operator tenant display name")
+    operator_tenant_slug: Optional[str] = Field(default=None, description="Enriched operator tenant slug")

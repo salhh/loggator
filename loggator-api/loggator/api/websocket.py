@@ -11,6 +11,7 @@ from loggator.auth.client import IAMClient
 from loggator.config import settings
 from loggator.db.session import AsyncSessionLocal
 from loggator.tenancy.deps import resolve_effective_tenant_uuid
+from loggator.tenancy.msp_scope import enrich_user_msp_from_db, is_platform_superadmin
 
 router = APIRouter(tags=["websocket"])
 
@@ -95,7 +96,8 @@ async def websocket_live(websocket: WebSocket):
                 await websocket.close(code=4401)
                 return
             async with AsyncSessionLocal() as session:
-                if "platform_admin" in (user.platform_roles or []):
+                user = await enrich_user_msp_from_db(session, user)
+                if is_platform_superadmin(user):
                     reg = _WsClient(tenant_filter=None)
                 else:
                     try:

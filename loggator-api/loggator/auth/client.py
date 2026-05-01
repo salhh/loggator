@@ -92,6 +92,24 @@ class IAMClient:
                 except ValueError:
                     continue
 
+        raw_ot = claims.get("operator_tenant_id") or claims.get("operatorTenantId")
+        parsed_operator: UUID | None = None
+        if raw_ot:
+            try:
+                parsed_operator = UUID(str(raw_ot))
+            except ValueError:
+                parsed_operator = None
+
+        skip = {
+            "sub",
+            "email",
+            "roles",
+            "platform_roles",
+            "tenant_id",
+            "tenant_ids",
+            "operator_tenant_id",
+            "operatorTenantId",
+        }
         return UserClaims(
             user_id=sub,
             email=email,
@@ -99,7 +117,8 @@ class IAMClient:
             platform_roles=list(platform_roles) if isinstance(platform_roles, list) else [],
             tenant_id=parsed_tenant_id,
             tenant_ids=parsed_tenant_ids,
-            **{k: v for k, v in claims.items() if k not in {"sub", "email", "roles", "platform_roles", "tenant_id", "tenant_ids"}},
+            operator_tenant_id=parsed_operator,
+            **{k: v for k, v in claims.items() if k not in skip},
         )
 
     async def verify_token(self, token: str) -> UserClaims | None:

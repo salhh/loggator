@@ -31,7 +31,7 @@ async def resolve_effective_tenant_uuid(
             except ValueError:
                 raise HTTPException(status_code=400, detail="Invalid X-Tenant-Id header")
             row = await session.get(Tenant, tid)
-            if row is None or row.status != "active":
+            if row is None or row.status != "active" or row.deleted_at is not None:
                 raise HTTPException(status_code=404, detail="Tenant not found or inactive")
             return tid
         return await get_default_tenant_id(session)
@@ -51,7 +51,7 @@ async def resolve_effective_tenant_uuid(
             raise HTTPException(status_code=400, detail="Invalid X-Tenant-Id header")
 
     tenant = await session.get(Tenant, chosen)
-    if tenant is None or tenant.status != "active":
+    if tenant is None or tenant.status != "active" or tenant.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Tenant not found or inactive")
 
     if not await user_can_access_tenant(session, user, chosen):

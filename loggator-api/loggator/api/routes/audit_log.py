@@ -16,6 +16,7 @@ router = APIRouter(tags=["observability"])
 def _audit_dict(r: AuditLog) -> dict[str, Any]:
     return {
         "id": str(r.id),
+        "tenant_id": str(r.tenant_id) if r.tenant_id else None,
         "timestamp": r.timestamp.isoformat(),
         "request_id": r.request_id,
         "method": r.method,

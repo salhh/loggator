@@ -1,0 +1,64 @@
+# Hot-reload development overlay. Use with docker-compose.local.yml:
+#
+#   docker compose -f docker-compose.local.yml -f docker-compose.dev.yml up --build
+#
+# - API: uvicorn --reload; ./loggator-api mounted at /app
+# - Web: next dev; ./loggator-web mounted; node_modules in a named volume (npm ci on first run if empty)
+#
+# After changing package.json / lockfile, rebuild web or run:
+#   docker compose -f docker-compose.local.yml -f docker-compose.dev.yml run --rm web npm ci --legacy-peer-deps
+#
+# Production-style stack (no reload): docker compose -f docker-compose.local.yml up --build
+
+services:
+  api:
+    # Bind-mount replaces /app; avoid image ENTRYPOINT (docker-entrypoint.sh) which breaks on some hosts (CRLF / path).
+    entrypoint: []
+    command:
+      - uvicorn
+      - loggator.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - /app/loggator
+    volumes:
+      - ./loggator-api:/app
+      - ./.env:/app/.env
+
+  web:
+    build:
+      context: ./loggator-web
+      dockerfile: Dockerfile.dev
+    environment:
+      HOSTNAME: 0.0.0.0
+      NODE_ENV: development
+      # File watching inside Docker Desktop (especially Windows)
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+      API_URL: http://api:8000/api/v1
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000/ws/live
+      AUTH_SECRET: ${AUTH_SECRET:-dev-only-change-for-production}
+      AUTH_URL: http://localhost:3000
+      AUTH_ALLOW_PASSWORD_LOGIN: ${AUTH_ALLOW_PASSWORD_LOGIN:-true}
+      AUTH_ALLOW_TOKEN_LOGIN: ${AUTH_ALLOW_TOKEN_LOGIN:-false}
+      AUTH_SSO_ENABLED: ${AUTH_SSO_ENABLED:-true}
+      NEXT_PUBLIC_AUTH_ALLOW_TOKEN: ${NEXT_PUBLIC_AUTH_ALLOW_TOKEN:-true}
+      NEXT_PUBLIC_AUTH_SSO_ENABLED: ${NEXT_PUBLIC_AUTH_SSO_ENABLED:-false}
+      NEXT_PUBLIC_AUTH_END_SESSION_URL: ${NEXT_PUBLIC_AUTH_END_SESSION_URL:-}
+      NEXT_PUBLIC_AUTH_POST_LOGOUT_REDIRECT_URI: ${NEXT_PUBLIC_AUTH_POST_LOGOUT_REDIRECT_URI:-}
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -d node_modules/next ]; then npm ci --legacy-peer-deps; fi
+        exec npm run dev -- --hostname 0.0.0.0 --port 3000
+    volumes:
+      - ./loggator-web:/app
+      - web_dev_node_modules:/app/node_modules
+
+volumes:
+  web_dev_node_modules:

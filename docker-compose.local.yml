@@ -2,7 +2,13 @@
 #
 #   docker compose -f docker-compose.local.yml up --build
 #
+# Hot reload (API + Next dev, no image rebuild per code change):
+#   docker compose -f docker-compose.local.yml -f docker-compose.dev.yml up --build
+#
 # UI: http://localhost:3000   API: http://localhost:8000/api/v1
+#
+# After migrate, `seed` creates demo-msp-customer + msp@local / msp-admin-demo + customer@local / customer-demo
+# (override with SEED_MSP_EMAIL, SEED_MSP_PASSWORD, SEED_CUSTOMER_EMAIL, SEED_CUSTOMER_PASSWORD).
 # Multi-tenant: GET /api/v1/tenants — send header X-Tenant-Id: <uuid> to scope data (default tenant if omitted).
 # Postgres + OpenSearch are internal; LLM defaults to host Ollama at host.docker.internal:11434.
 # Optional: create a .env next to this file with OLLAMA_MODEL=<name from `ollama list`> if not using default llama3.
@@ -54,6 +60,24 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # Idempotent MSP + customer + support demo (see loggator-api/scripts/seed_local_msp_demo.py)
+  seed:
+    build:
+      context: ./loggator-api
+      dockerfile: Dockerfile
+    command: ["python", "scripts/seed_local_msp_demo.py"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://loggator:loggator@postgres:5432/loggator
+      DEV_JWT_SECRET: ${DEV_JWT_SECRET:-local-dev-jwt-secret-change-me}
+      SEED_MSP_EMAIL: ${SEED_MSP_EMAIL:-msp@local}
+      SEED_MSP_PASSWORD: ${SEED_MSP_PASSWORD:-msp-admin-demo}
+      SEED_CUSTOMER_EMAIL: ${SEED_CUSTOMER_EMAIL:-customer@local}
+      SEED_CUSTOMER_PASSWORD: ${SEED_CUSTOMER_PASSWORD:-customer-demo}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
   api:
     build:
       context: ./loggator-api
@@ -72,6 +96,11 @@ services:
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3}
       LLM_PROVIDER: ollama
+      # JWT for browser sessions (password login + optional token paste). HS256 via python-jose.
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
+      DEV_JWT_SECRET: ${DEV_JWT_SECRET:-local-dev-jwt-secret-change-me}
+      BOOTSTRAP_LOCAL_ADMIN_EMAIL: ${BOOTSTRAP_LOCAL_ADMIN_EMAIL:-admin@local}
+      BOOTSTRAP_LOCAL_ADMIN_PASSWORD: ${BOOTSTRAP_LOCAL_ADMIN_PASSWORD:-admin}
     volumes:
       - ./.env:/app/.env
     depends_on:
@@ -80,6 +109,8 @@ services:
       opensearch:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      seed:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/v1/status"]
@@ -94,6 +125,10 @@ services:
       args:
         NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
         NEXT_PUBLIC_WS_URL: ws://localhost:8000/ws/live
+        NEXT_PUBLIC_AUTH_ALLOW_TOKEN: ${NEXT_PUBLIC_AUTH_ALLOW_TOKEN:-true}
+        NEXT_PUBLIC_AUTH_SSO_ENABLED: ${NEXT_PUBLIC_AUTH_SSO_ENABLED:-false}
+        NEXT_PUBLIC_AUTH_END_SESSION_URL: ${NEXT_PUBLIC_AUTH_END_SESSION_URL:-}
+        NEXT_PUBLIC_AUTH_POST_LOGOUT_REDIRECT_URI: ${NEXT_PUBLIC_AUTH_POST_LOGOUT_REDIRECT_URI:-}
     ports:
       - "3000:3000"
     environment:
@@ -102,8 +137,12 @@ services:
       # NextAuth (browser: http://localhost:3000)
       AUTH_SECRET: ${AUTH_SECRET:-dev-only-change-for-production}
       AUTH_URL: http://localhost:3000
-      AUTH_ALLOW_TOKEN_LOGIN: ${AUTH_ALLOW_TOKEN_LOGIN:-true}
+      AUTH_ALLOW_PASSWORD_LOGIN: ${AUTH_ALLOW_PASSWORD_LOGIN:-true}
+      AUTH_ALLOW_TOKEN_LOGIN: ${AUTH_ALLOW_TOKEN_LOGIN:-false}
+      # Runtime only (not baked at `next build`). Use false to hide the SSO button while OIDC env vars exist.
+      AUTH_SSO_ENABLED: ${AUTH_SSO_ENABLED:-true}
       NEXT_PUBLIC_AUTH_ALLOW_TOKEN: ${NEXT_PUBLIC_AUTH_ALLOW_TOKEN:-true}
+      # Client bundle; login page uses AUTH_SSO_ENABLED for SSO visibility so runtime OIDC still works after build.
       NEXT_PUBLIC_AUTH_SSO_ENABLED: ${NEXT_PUBLIC_AUTH_SSO_ENABLED:-false}
       # Optional OIDC federated logout:
       # - Example (Keycloak): https://idp.example.com/realms/<realm>/protocol/openid-connect/logout

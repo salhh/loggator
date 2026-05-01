@@ -8,7 +8,16 @@ const BASE =
   process.env.NEXT_PUBLIC_API_URL ??
   "http://localhost:8000/api/v1";
 
-export type TenantRow = { id: string; name: string; slug: string; status: string; created_at: string; member_count: number };
+export type TenantRow = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  created_at: string;
+  member_count: number;
+  parent_tenant_id?: string | null;
+  is_operator?: boolean;
+};
 
 export type AuthMeResponse = {
   user_id: string;
@@ -17,7 +26,31 @@ export type AuthMeResponse = {
   platform_roles: string[];
   tenant_id?: string | null;
   tenant_ids?: string[];
+  operator_tenant_id?: string | null;
+  operator_tenant_name?: string | null;
+  operator_tenant_slug?: string | null;
 };
+
+export type SupportThread = {
+  id: string;
+  tenant_id: string;
+  operator_tenant_id: string;
+  status: string;
+  subject: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SupportMessage = {
+  id: string;
+  thread_id: string;
+  author_user_id: string | null;
+  body: string;
+  is_staff: boolean;
+  created_at: string;
+};
+
+export type SupportThreadDetail = SupportThread & { messages: SupportMessage[] };
 
 function extraHeaders(xTenantId?: string): Record<string, string> {
   return xTenantId ? { "X-Tenant-Id": xTenantId } : {};
@@ -263,9 +296,35 @@ export const api = {
     slug: string;
     admin_subject?: string | null;
     admin_email?: string | null;
+    parent_tenant_id?: string | null;
+    is_operator?: boolean;
   }) => post<TenantRow>("/platform/tenants", body),
   platformPatchTenant: (id: string, body: { name?: string; slug?: string; status?: string }) =>
     patch<TenantRow>(`/platform/tenants/${id}`, body),
+  platformArchiveTenant: (id: string) => del<{ ok: boolean; tenant_id: string }>(`/platform/tenants/${id}`),
+
+  supportThreads: (xTenantId?: string) => get<SupportThread[]>("/support/threads", xTenantId),
+  supportThread: (id: string, xTenantId?: string) =>
+    get<SupportThreadDetail>(`/support/threads/${id}`, xTenantId),
+  createSupportThread: (subject: string, xTenantId?: string) =>
+    post<SupportThread>("/support/threads", { subject }, xTenantId),
+  postSupportMessage: (threadId: string, body: string, xTenantId?: string) =>
+    post<SupportMessage>(`/support/threads/${threadId}/messages`, { body }, xTenantId),
+
+  platformSupportThreads: (params?: { status?: string; tenant_id?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.tenant_id) qs.set("tenant_id", params.tenant_id);
+    const q = qs.toString();
+    return get<SupportThread[]>(`/platform/support/threads${q ? `?${q}` : ""}`);
+  },
+  platformSupportThread: (id: string) => get<SupportThreadDetail>(`/platform/support/threads/${id}`),
+  platformPostSupportMessage: (threadId: string, body: string) =>
+    post<SupportMessage>(`/platform/support/threads/${threadId}/messages`, { body }),
+  platformPatchSupportThread: (
+    threadId: string,
+    body: { status?: string; assigned_to_user_id?: string | null }
+  ) => patch<SupportThread>(`/platform/support/threads/${threadId}`, body),
   platformUsers: (search?: string) =>
     get<Array<{ id: string; subject: string; email: string; created_at: string }>>(
       `/platform/users${search ? `?search=${encodeURIComponent(search)}` : ""}`

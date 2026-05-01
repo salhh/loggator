@@ -17,6 +17,7 @@ from loggator.db.session import get_session
 from loggator.tenancy.deps import get_effective_tenant_id
 from loggator.tenancy.membership import count_tenant_admins, get_membership_for_subject
 from loggator.tenancy.authz import assert_platform_or_membership_roles, assert_tenant_admin_or_platform
+from loggator.tenancy.msp_scope import is_msp_admin
 
 router = APIRouter(prefix="/tenant/members", tags=["tenant-members"])
 
@@ -45,8 +46,12 @@ class MemberPatch(BaseModel):
     role: str = Field(..., pattern=r"^(tenant_admin|tenant_member)$")
 
 
-def _is_platform(user: UserClaims | None) -> bool:
-    return bool(user and "platform_admin" in (user.platform_roles or []))
+def _is_platform_or_msp_elevated(user: UserClaims | None) -> bool:
+    if not user:
+        return False
+    if "platform_admin" in (user.platform_roles or []):
+        return True
+    return is_msp_admin(user)
 
 
 @router.get("", response_model=list[MemberOut])
@@ -137,10 +142,10 @@ async def patch_tenant_member(
     m, u = row
     if m.role == "tenant_admin" and body.role == "tenant_member":
         n = await count_tenant_admins(session, tenant_id)
-        if n <= 1 and not _is_platform(user):
+        if n <= 1 and not _is_platform_or_msp_elevated(user):
             raise HTTPException(
                 status_code=400,
-                detail="Cannot demote the last tenant_admin; add another admin or use a platform admin",
+                detail="Cannot demote the last tenant_admin; add another admin or contact your MSP",
             )
     m.role = body.role
     await session.commit()
@@ -171,10 +176,10 @@ async def remove_tenant_member(
         raise HTTPException(status_code=404, detail="Membership not found")
     if m.role == "tenant_admin":
         n = await count_tenant_admins(session, tenant_id)
-        if n <= 1 and not _is_platform(user):
+        if n <= 1 and not _is_platform_or_msp_elevated(user):
             raise HTTPException(
                 status_code=400,
-                detail="Cannot remove the last tenant_admin; add another admin or use a platform admin",
+                detail="Cannot remove the last tenant_admin; add another admin or contact your MSP",
             )
     await session.delete(m)
     await session.commit()
