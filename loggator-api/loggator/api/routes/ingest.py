@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.db.session import get_session
 from loggator.opensearch.client import get_effective_index_pattern, get_opensearch_for_tenant
-from loggator.tenancy.deps import get_effective_tenant_id
+from loggator.tenancy.ingest_deps import resolve_ingest_tenant_id
 
 log = structlog.get_logger()
 router = APIRouter(prefix="/ingest", tags=["ingest"])
@@ -50,7 +50,7 @@ def _coerce_timestamp(raw: Optional[str]) -> str:
 async def ingest_logs(
     body: IngestIn,
     session: AsyncSession = Depends(get_session),
-    tenant_id: UUID = Depends(get_effective_tenant_id),
+    tenant_id: UUID = Depends(resolve_ingest_tenant_id),
 ):
     pattern = await get_effective_index_pattern(session, tenant_id)
     if not fnmatch.fnmatch(body.index, pattern):

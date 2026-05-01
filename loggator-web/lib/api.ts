@@ -1,4 +1,5 @@
 import type { Summary, Anomaly, Alert, StatusResponse, AnalysisReport, ScheduledAnalysis, ScheduleStatus, HealthResponse, StatsResponse, SystemEventsResponse, SystemEvent, AuditLogEntry } from "./types";
+import { authHeaders } from "./auth-headers";
 
 // API_URL is only available server-side (no NEXT_PUBLIC_ prefix).
 // NEXT_PUBLIC_API_URL is used by the browser. Fall back to localhost for dev.
@@ -7,8 +8,22 @@ const BASE =
   process.env.NEXT_PUBLIC_API_URL ??
   "http://localhost:8000/api/v1";
 
+export type TenantRow = { id: string; name: string; slug: string; status: string; created_at: string };
+
+export type AuthMeResponse = {
+  user_id: string;
+  email: string;
+  roles: string[];
+  platform_roles: string[];
+  tenant_id?: string | null;
+  tenant_ids?: string[];
+};
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { cache: "no-store" });
+  const res = await fetch(`${BASE}${path}`, {
+    cache: "no-store",
+    headers: { ...authHeaders() },
+  });
   if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
   return res.json();
 }
@@ -16,7 +31,7 @@ async function get<T>(path: string): Promise<T> {
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -37,7 +52,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 async function put<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -53,7 +68,43 @@ async function put<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      if (typeof j.detail === "string") detail = j.detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail || `API error ${res.status}: ${path}`);
+  }
+  return res.json();
+}
+
+async function del<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: "DELETE", headers: { ...authHeaders() } });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      if (typeof j.detail === "string") detail = j.detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail || `API error ${res.status}: ${path}`);
+  }
+  return res.json();
+}
+
 export const api = {
+  authMe: () => get<AuthMeResponse>("/auth/me"),
+  tenants: () => get<TenantRow[]>("/tenants"),
   status: () => get<StatusResponse>("/status"),
   summaries: (limit = 20, offset = 0) =>
     get<Summary[]>(`/summaries?limit=${limit}&offset=${offset}`),
@@ -73,7 +124,9 @@ export const api = {
   triggerIndex: (index_pattern?: string, hours_back = 1, size = 500) =>
     post<{ message: string }>("/chat/index", { index_pattern, hours_back, size }),
   logIndices: () =>
-    fetch(`${BASE.replace("/api/v1", "")}/api/v1/logs/indices`).then((r) => r.json()) as Promise<{ indices: string[] }>,
+    fetch(`${BASE.replace("/api/v1", "")}/api/v1/logs/indices`, {
+      headers: { ...authHeaders() },
+    }).then((r) => r.json()) as Promise<{ indices: string[] }>,
   triggerBatch: () => post<{ message: string }>("/batch/trigger", {}),
   analyzeLogs: (index_pattern?: string, hours_back = 1, size = 500) =>
     post<AnalysisReport>("/chat/analyze", { index_pattern, hours_back, size }),
@@ -130,4 +183,72 @@ export const api = {
     const q = qs.toString();
     return get<AuditLogEntry[]>(`/audit-log${q ? `?${q}` : ""}`);
   },
+  createTenantApiKey: (name: string) =>
+    post<{
+      id: string;
+      name: string;
+      key_prefix: string;
+      key: string;
+      scopes: string[];
+      created_at: string;
+    }>("/tenant-api-keys", { name, scopes: ["ingest"] }),
+  listTenantApiKeys: () =>
+    get<
+      Array<{
+        id: string;
+        name: string;
+        key_prefix: string;
+        scopes: string[];
+        created_at: string;
+        last_used_at: string | null;
+        revoked_at: string | null;
+      }>
+    >("/tenant-api-keys"),
+  revokeTenantApiKey: (id: string) => post<{ ok: boolean }>(`/tenant-api-keys/${id}/revoke`, {}),
+
+  platformTenants: () => get<TenantRow[]>("/platform/tenants"),
+  platformTenant: (id: string) => get<TenantRow>(`/platform/tenants/${id}`),
+  platformCreateTenant: (body: {
+    name: string;
+    slug: string;
+    admin_subject?: string | null;
+    admin_email?: string | null;
+  }) => post<TenantRow>("/platform/tenants", body),
+  platformPatchTenant: (id: string, body: { name?: string; slug?: string; status?: string }) =>
+    patch<TenantRow>(`/platform/tenants/${id}`, body),
+  platformUsers: (search?: string) =>
+    get<Array<{ id: string; subject: string; email: string; created_at: string }>>(
+      `/platform/users${search ? `?search=${encodeURIComponent(search)}` : ""}`
+    ),
+
+  tenantMembers: () =>
+    get<
+      Array<{
+        membership_id: string;
+        user_id: string;
+        subject: string;
+        email: string;
+        role: string;
+        created_at: string;
+      }>
+    >("/tenant/members"),
+  addTenantMember: (body: { subject: string; email?: string; role?: string }) =>
+    post<{
+      membership_id: string;
+      user_id: string;
+      subject: string;
+      email: string;
+      role: string;
+      created_at: string;
+    }>("/tenant/members", body),
+  patchTenantMember: (membershipId: string, body: { role: string }) =>
+    patch<{
+      membership_id: string;
+      user_id: string;
+      subject: string;
+      email: string;
+      role: string;
+      created_at: string;
+    }>(`/tenant/members/${membershipId}`, body),
+  removeTenantMember: (membershipId: string) => del<{ ok: boolean }>(`/tenant/members/${membershipId}`),
 };

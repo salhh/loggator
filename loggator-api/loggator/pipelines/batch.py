@@ -146,6 +146,7 @@ async def run_batch(
 async def run_scheduled_analysis(
     window_minutes: int | None = None,
     index_pattern: str | None = None,
+    tenant_id: UUID | None = None,
 ) -> ScheduledAnalysis | None:
     """
     Run both a batch summary AND a deep RCA for the configured time window.
@@ -156,9 +157,9 @@ async def run_scheduled_analysis(
     from_ts = now - timedelta(minutes=window)
 
     async with AsyncSessionLocal() as session:
-        tenant_id = await get_default_tenant_id(session)
-        index = index_pattern or await get_effective_index_pattern(session, tenant_id)
-        existing = await ScheduledAnalysisRepository(session, tenant_id).find_by_window(from_ts, now)
+        tid = tenant_id or await get_default_tenant_id(session)
+        index = index_pattern or await get_effective_index_pattern(session, tid)
+        existing = await ScheduledAnalysisRepository(session, tid).find_by_window(from_ts, now)
         if existing:
             log.info("scheduled_analysis.skipped", reason="duplicate_window",
                      existing_id=str(existing.id))
@@ -169,7 +170,7 @@ async def run_scheduled_analysis(
 
     try:
         async with AsyncSessionLocal() as session:
-            os_client = await get_opensearch_for_tenant(session, tenant_id)
+            os_client = await get_opensearch_for_tenant(session, tid)
         raw_docs = await range_query_logs(os_client, index, from_ts, now)
     except Exception as exc:
         log.error("scheduled_analysis.opensearch.failed", error=str(exc))
@@ -191,8 +192,8 @@ async def run_scheduled_analysis(
     try:
         summary_result = await summarize_chunks(chunks)
         async with AsyncSessionLocal() as session:
-            await SummaryRepository(session, tenant_id).save(Summary(
-                tenant_id=tenant_id,
+            await SummaryRepository(session, tid).save(Summary(
+                tenant_id=tid,
                 window_start=from_ts, window_end=now, index_pattern=index,
                 summary=summary_result.get("summary", ""),
                 top_issues=summary_result.get("top_issues", []),
@@ -217,7 +218,7 @@ async def run_scheduled_analysis(
         }
 
     record = ScheduledAnalysis(
-        tenant_id=tenant_id,
+        tenant_id=tid,
         window_start=from_ts, window_end=now, index_pattern=index,
         summary=rca.get("summary", ""),
         affected_services=rca.get("affected_services", []),
@@ -230,7 +231,7 @@ async def run_scheduled_analysis(
         model_used=_active_model(), status=status,
     )
     async with AsyncSessionLocal() as session:
-        saved = await ScheduledAnalysisRepository(session, tenant_id).save(record)
+        saved = await ScheduledAnalysisRepository(session, tid).save(record)
 
     log.info("scheduled_analysis.saved", id=str(saved.id), status=status)
     return saved

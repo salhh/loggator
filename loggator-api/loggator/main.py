@@ -36,6 +36,11 @@ from loggator.api.routes import audit_log as audit_log_routes
 from loggator.api.routes import llms as llms_routes
 from loggator.api.routes import alert_channels as alert_channels_routes
 from loggator.api.routes import tenants as tenants_routes
+from loggator.api.routes import platform_tenants as platform_tenants_routes
+from loggator.api.routes import tenant_api_keys as tenant_api_keys_routes
+from loggator.api.routes import tenant_members as tenant_members_routes
+from loggator.api.routes import platform_users as platform_users_routes
+from loggator.api.routes import auth_info as auth_info_routes
 from loggator.api import websocket
 from loggator.observability.middleware import AuditLogMiddleware
 
@@ -56,10 +61,12 @@ limiter = Limiter(key_func=_real_client_ip, default_limits=[settings.api_rate_li
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from loggator.pipelines.scheduler import start_scheduler, stop_scheduler
+    from loggator.opensearch.client import close_all_clients
     log.info("loggator.startup", host=settings.api_host, port=settings.api_port)
     start_scheduler()
     yield
     stop_scheduler()
+    await close_all_clients()
     log.info("loggator.shutdown")
 
 
@@ -87,6 +94,7 @@ app.add_middleware(
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(AuditLogMiddleware)
 
+app.include_router(auth_info_routes.router, prefix="/api/v1")
 app.include_router(status.router, prefix="/api/v1")
 app.include_router(runtime.router, prefix="/api/v1")
 app.include_router(summaries.router, prefix="/api/v1")
@@ -105,4 +113,8 @@ app.include_router(audit_log_routes.router, prefix="/api/v1")
 app.include_router(llms_routes.router, prefix="/api/v1")
 app.include_router(alert_channels_routes.router, prefix="/api/v1")
 app.include_router(tenants_routes.router, prefix="/api/v1")
+app.include_router(platform_tenants_routes.router, prefix="/api/v1")
+app.include_router(tenant_api_keys_routes.router, prefix="/api/v1")
+app.include_router(tenant_members_routes.router, prefix="/api/v1")
+app.include_router(platform_users_routes.router, prefix="/api/v1")
 app.include_router(websocket.router)

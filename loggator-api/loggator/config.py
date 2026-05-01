@@ -82,10 +82,16 @@ class Settings(BaseSettings):
 
     # Auth (OIDC/JWT)
     auth_disabled: bool = True  # dev default; set false in real deployments
+    auto_provision_default_tenant: bool = True  # assign new users to bootstrap tenant on first login
     oidc_issuer: str = ""
     oidc_audience: str = ""
     oidc_jwks_url: str = ""
     dev_jwt_secret: SecretStr = SecretStr("")  # optional HS256 dev-only secret
+
+    # Tenant connection secrets at rest (generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+    connection_secrets_fernet_key: SecretStr = SecretStr("")
+    # Pepper for hashing ingest API keys (set in prod)
+    api_key_pepper: SecretStr = SecretStr("dev-insecure-pepper-change-me")
 
 
 settings = Settings()

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useWebSocket, type WsEvent } from "@/lib/websocket";
 import AnomalyCard from "@/components/AnomalyCard";
+import { useAuth } from "@/components/AuthProvider";
 
 interface LiveAnomaly {
   anomaly_id: string;
@@ -17,23 +18,42 @@ function fmtTime(iso: string) {
 }
 
 export default function LiveFeed() {
+  const { accessToken, tenantId } = useAuth();
   const [events, setEvents] = useState<LiveAnomaly[]>([]);
-  const { connected } = useWebSocket((event: WsEvent) => {
-    if (event.type === "anomaly") {
-      setEvents((prev) => [event as unknown as LiveAnomaly, ...prev].slice(0, 20));
-    }
-  });
+  const { connected, permanentlyOffline, reconnect } = useWebSocket(
+    (event: WsEvent) => {
+      if (event.type === "anomaly") {
+        setEvents((prev) => [event as unknown as LiveAnomaly, ...prev].slice(0, 20));
+      }
+    },
+    accessToken,
+    tenantId
+  );
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 mb-2">
-        <span
-          className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground"}`}
-        />
-        <span className="text-xs text-muted-foreground">
-          {connected ? "connected" : "connecting..."}
-        </span>
-      </div>
+      {permanentlyOffline ? (
+        <div className="flex items-center gap-2 mb-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+          <span className="text-xs text-red-400 flex-1">Live feed disconnected</span>
+          <button
+            type="button"
+            onClick={reconnect}
+            className="text-xs text-cyan-400 hover:underline shrink-0"
+          >
+            Reconnect
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 mb-2">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500" : "bg-muted-foreground"}`}
+          />
+          <span className="text-xs text-muted-foreground">
+            {connected ? "connected" : "connecting..."}
+          </span>
+        </div>
+      )}
       {events.length === 0 ? (
         <p className="text-xs text-muted-foreground">Waiting for anomalies...</p>
       ) : (

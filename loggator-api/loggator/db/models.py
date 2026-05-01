@@ -64,6 +64,22 @@ class TenantConnection(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
+class TenantApiKey(Base):
+    """Per-tenant API keys (e.g. log ingest). Plaintext is shown only once at creation."""
+
+    __tablename__ = "tenant_api_keys"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(Text, nullable=False)
+    key_prefix = Column(String(24), nullable=False)
+    key_hash = Column(String(64), nullable=False, index=True)
+    scopes = Column(JSONB, nullable=False, default=list)  # e.g. ["ingest"]
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+
 class Summary(Base):
     __tablename__ = "summaries"
 

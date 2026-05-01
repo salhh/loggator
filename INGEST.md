@@ -8,8 +8,12 @@ The API can index logs into the tenant’s OpenSearch via a bulk ingest endpoint
 
 ### Auth / tenancy
 
-- If auth is enabled, include `Authorization: Bearer <JWT>`.
-- For multi-tenant tokens or platform support, include `X-Tenant-Id: <uuid>`.
+- **JWT:** `Authorization: Bearer <JWT>`. If the token has multiple tenants (`tenant_ids`) and no single `tenant_id` claim, send **`X-Tenant-Id: <uuid>`** (not required when exactly one tenant is implied).
+- **Ingest API key:** create via `POST /api/v1/tenant-api-keys` (see `DEPLOY.md`; callers need **`tenant_admin` membership** for that tenant or a **`platform_admin`** JWT). Send the raw key as either:
+  - `Authorization: Bearer lgk_...`, or
+  - `X-API-Key: lgk_...`  
+  Keys are scoped (default scope `ingest`); revoked keys return `401`.
+- **Platform admin** may impersonate a tenant by passing **`X-Tenant-Id`** together with a platform JWT.
 
 ### Request body
 

@@ -3,9 +3,11 @@ import structlog
 from datetime import datetime, timezone
 from uuid import UUID
 
+from sqlalchemy import select
+
 from loggator.config import settings
 from loggator.db.session import AsyncSessionLocal
-from loggator.db.models import Anomaly
+from loggator.db.models import Anomaly, Tenant
 from loggator.db.repository import CheckpointRepository, AnomalyRepository
 from loggator.opensearch.client import get_opensearch_for_tenant, get_effective_index_pattern
 from loggator.opensearch.queries import search_after_logs
@@ -14,12 +16,12 @@ from loggator.processing.chunker import chunk_docs
 from loggator.processing.mapreduce import analyze_chunks_for_anomalies
 from loggator.alerts.dispatcher import dispatch
 from loggator.observability import system_event_writer
-from loggator.tenancy.bootstrap import get_default_tenant_id
 
 log = structlog.get_logger()
 
 _running = False
-_task: asyncio.Task | None = None
+_supervisor_task: asyncio.Task | None = None
+_tenant_tasks: dict[UUID, asyncio.Task] = {}
 
 
 async def _process_batch(
@@ -61,15 +63,19 @@ async def _process_batch(
         saved.append(anomaly)
 
         try:
-            from loggator.api.websocket import broadcast
-            await broadcast({
-                "type": "anomaly",
-                "anomaly_id": str(anomaly.id),
-                "severity": anomaly.severity,
-                "summary": anomaly.summary,
-                "detected_at": anomaly.detected_at.isoformat(),
-                "index_pattern": anomaly.index_pattern,
-            })
+            from loggator.api.websocket import broadcast_tenant_event
+
+            await broadcast_tenant_event(
+                tenant_id,
+                {
+                    "type": "anomaly",
+                    "anomaly_id": str(anomaly.id),
+                    "severity": anomaly.severity,
+                    "summary": anomaly.summary,
+                    "detected_at": anomaly.detected_at.isoformat(),
+                    "index_pattern": anomaly.index_pattern,
+                },
+            )
         except Exception:
             pass
 
@@ -83,29 +89,27 @@ async def _process_batch(
                 "index_pattern": index_pattern,
                 "severity": severity,
                 "anomaly_id": str(anomaly.id),
+                "tenant_id": str(tenant_id),
             },
         )
 
     return saved
 
 
-async def run_streaming_worker(index_pattern: str | None = None) -> None:
-    """Continuously tail OpenSearch using search_after, detect anomalies in real time."""
-    global _running
-    _running = True
-
+async def _tenant_stream_loop(tenant_id: UUID, global_index_pattern: str | None) -> None:
     async with AsyncSessionLocal() as session:
-        tenant_id = await get_default_tenant_id(session)
-        resolved_index = index_pattern or await get_effective_index_pattern(session, tenant_id)
+        resolved_index = global_index_pattern or await get_effective_index_pattern(session, tenant_id)
         os_client = await get_opensearch_for_tenant(session, tenant_id)
 
     index_pattern = resolved_index
-    log.info("streaming.started", index_pattern=index_pattern, tenant_id=str(tenant_id))
+    log.info("streaming.tenant_started", index_pattern=index_pattern, tenant_id=str(tenant_id))
 
     async with AsyncSessionLocal() as session:
         cp_repo = CheckpointRepository(session, tenant_id)
         checkpoint = await cp_repo.get(index_pattern)
         sort_cursor = checkpoint.last_sort if checkpoint else None
+
+    _backoff = 5.0  # seconds; doubles on consecutive errors, resets to 5 after success
 
     while _running:
         try:
@@ -117,7 +121,7 @@ async def run_streaming_worker(index_pattern: str | None = None) -> None:
             )
 
             if docs:
-                log.info("streaming.fetched", count=len(docs), index_pattern=index_pattern)
+                log.info("streaming.fetched", count=len(docs), index_pattern=index_pattern, tenant_id=str(tenant_id))
                 async with AsyncSessionLocal() as session:
                     await _process_batch(docs, index_pattern, session, tenant_id)
 
@@ -134,30 +138,66 @@ async def run_streaming_worker(index_pattern: str | None = None) -> None:
         except asyncio.CancelledError:
             break
         except Exception as exc:
-            log.error("streaming.error", error=str(exc))
+            log.error("streaming.error", error=str(exc), tenant_id=str(tenant_id))
             await system_event_writer.write(
                 service="streaming",
                 event_type="error",
                 severity="error",
                 message=f"Streaming worker error: {exc}",
-                details={"error": str(exc), "index_pattern": index_pattern},
+                details={"error": str(exc), "index_pattern": index_pattern, "tenant_id": str(tenant_id)},
             )
+            log.warning("streaming.backoff", sleep_seconds=_backoff, tenant_id=str(tenant_id))
+            await asyncio.sleep(_backoff)
+            _backoff = min(_backoff * 2, 120.0)
+            continue
 
+        _backoff = 5.0
         await asyncio.sleep(settings.streaming_poll_interval_seconds)
 
-    log.info("streaming.stopped")
+    log.info("streaming.tenant_stopped", tenant_id=str(tenant_id))
+
+
+async def run_streaming_supervisor(global_index_pattern: str | None = None) -> None:
+    """Refresh active tenants periodically and run one tail loop per tenant."""
+    global _running, _tenant_tasks
+    _running = True
+    refresh_seconds = 45
+    try:
+        while _running:
+            async with AsyncSessionLocal() as session:
+                active = set(
+                    (await session.execute(select(Tenant.id).where(Tenant.status == "active"))).scalars().all()
+                )
+
+            for tid in active - set(_tenant_tasks):
+                _tenant_tasks[tid] = asyncio.create_task(_tenant_stream_loop(tid, global_index_pattern))
+
+            for tid in list(_tenant_tasks):
+                if tid not in active:
+                    _tenant_tasks[tid].cancel()
+                    del _tenant_tasks[tid]
+
+            for _ in range(refresh_seconds):
+                if not _running:
+                    break
+                await asyncio.sleep(1)
+    finally:
+        for t in list(_tenant_tasks.values()):
+            t.cancel()
+        _tenant_tasks.clear()
+        log.info("streaming.supervisor_stopped")
 
 
 def start_streaming(index_pattern: str | None = None) -> asyncio.Task:
-    global _task
-    if _task and not _task.done():
-        return _task
-    _task = asyncio.create_task(run_streaming_worker(index_pattern))
-    return _task
+    global _supervisor_task
+    if _supervisor_task and not _supervisor_task.done():
+        return _supervisor_task
+    _supervisor_task = asyncio.create_task(run_streaming_supervisor(index_pattern))
+    return _supervisor_task
 
 
 def stop_streaming() -> None:
-    global _running, _task
+    global _running, _supervisor_task
     _running = False
-    if _task and not _task.done():
-        _task.cancel()
+    if _supervisor_task and not _supervisor_task.done():
+        _supervisor_task.cancel()

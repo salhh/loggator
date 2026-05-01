@@ -23,6 +23,8 @@ const ALERT_KEYS = new Set([
 const TABS = [
   { id: "alerts",   label: "Alerts" },
   { id: "schedule", label: "Schedule" },
+  { id: "ingest-keys", label: "Ingest keys" },
+  { id: "members", label: "Members" },
   { id: "advanced", label: "Advanced" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -97,6 +99,82 @@ const GUIDES: Record<string, { heading: string; sections: GuideStep[] }> = {
         title: "4. Paste into Loggator",
         steps: [
           "Enter the Bot Token and Chat ID, then click Save and Test.",
+        ],
+      },
+    ],
+  },
+  email: {
+    heading: "How to set up Email (SMTP) alerts",
+    sections: [
+      {
+        title: "1. Gather your SMTP settings",
+        steps: [
+          "You need: SMTP host, port, username, password, and a sender address.",
+          "Common providers: Gmail (smtp.gmail.com:587), Outlook (smtp.office365.com:587), AWS SES (email-smtp.<region>.amazonaws.com:587).",
+        ],
+      },
+      {
+        title: "2. App passwords (Gmail / Outlook)",
+        steps: [
+          "If you use 2-factor authentication (recommended), create an App Password instead of your account password.",
+          "Gmail: Google Account → Security → App Passwords → Mail.",
+          "Outlook: Account settings → Security → Create and manage app passwords.",
+        ],
+      },
+      {
+        title: "3. Fill in the Loggator fields",
+        steps: [
+          "SMTP Host — your provider's SMTP address (e.g. smtp.gmail.com).",
+          "SMTP Port — usually 587 (STARTTLS) or 465 (SSL).",
+          "SMTP Username — your email address or SMTP user.",
+          "SMTP Password — your app password or SMTP password.",
+          "From email — the address alerts will appear to come from.",
+          "Alert email to — one or more comma-separated recipient addresses.",
+        ],
+      },
+      {
+        title: "4. Save and Test",
+        steps: [
+          "Click Save, then Test. A test alert will be sent to the recipient address.",
+          "Check your spam folder if it doesn't arrive within a minute.",
+        ],
+      },
+    ],
+  },
+  webhook: {
+    heading: "How to set up a Custom Webhook",
+    sections: [
+      {
+        title: "1. What Loggator sends",
+        steps: [
+          "Loggator will POST JSON to your URL whenever an alert fires.",
+          { text: "Payload structure", code: '{"severity":"high","summary":"...","detected_at":"2026-05-01T...","index_pattern":"logs-*","mitre_tactics":[],"root_cause_hints":[]}' },
+        ],
+      },
+      {
+        title: "2. Headers sent",
+        steps: [
+          'Content-Type: application/json',
+          "No authentication header is added by default — use a secret in the URL query string if your endpoint requires it.",
+        ],
+      },
+      {
+        title: "3. Example receiver (Python)",
+        steps: [
+          { text: "Flask example", code: "from flask import Flask, request\napp = Flask(__name__)\n@app.post('/loggator')\ndef recv():\n    data = request.json\n    print(data['severity'], data['summary'])\n    return '', 200" },
+        ],
+      },
+      {
+        title: "4. Example receiver (Node.js)",
+        steps: [
+          { text: "Express example", code: "app.post('/loggator', express.json(), (req, res) => {\n  console.log(req.body.severity, req.body.summary);\n  res.sendStatus(200);\n});" },
+        ],
+      },
+      {
+        title: "5. Paste your URL and test",
+        steps: [
+          "Enter the full URL (including any secret query params) and click Save, then Test.",
+          "Loggator expects any 2xx response — non-2xx will be logged as a delivery failure.",
         ],
       },
     ],
@@ -234,10 +312,51 @@ export default function SettingsClient({ initial, envFile }: Props) {
   const [testResults, setTestResults] = useState<Record<string, string>>({});
   const [testLoading, setTestLoading] = useState<Record<string, boolean>>({});
   const [openGuide, setOpenGuide] = useState<string | null>(null);
+  const [ingestKeys, setIngestKeys] = useState<
+    Awaited<ReturnType<typeof api.listTenantApiKeys>>
+  >([]);
+  const [ingestKeysLoading, setIngestKeysLoading] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [justCreatedKey, setJustCreatedKey] = useState<string | null>(null);
+  const [members, setMembers] = useState<Awaited<ReturnType<typeof api.tenantMembers>>>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [newMemberSubject, setNewMemberSubject] = useState("");
+  const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [newMemberRole, setNewMemberRole] = useState<"tenant_admin" | "tenant_member">("tenant_member");
 
   useEffect(() => {
     api.scheduleStatus().then(setScheduleStatus).catch(() => {});
   }, []);
+
+  async function loadIngestKeys() {
+    setIngestKeysLoading(true);
+    try {
+      setIngestKeys(await api.listTenantApiKeys());
+    } catch {
+      setIngestKeys([]);
+    } finally {
+      setIngestKeysLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (tab === "ingest-keys") void loadIngestKeys();
+  }, [tab]);
+
+  async function loadMembers() {
+    setMembersLoading(true);
+    try {
+      setMembers(await api.tenantMembers());
+    } catch {
+      setMembers([]);
+    } finally {
+      setMembersLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (tab === "members") void loadMembers();
+  }, [tab]);
 
   useEffect(() => {
     if (!scheduleStatus) return;
@@ -381,6 +500,10 @@ export default function SettingsClient({ initial, envFile }: Props) {
 
           {/* Email */}
           <Card title="Email (SMTP)">
+            <div className="flex items-center justify-between -mt-1 mb-1">
+              <span className="text-xs text-muted-foreground">SMTP delivery</span>
+              <GuideButton guide="email" onOpen={setOpenGuide} />
+            </div>
             <div className="grid grid-cols-[1fr_100px] gap-3">
               <Field label="SMTP Host">
                 <Input value={val("SMTP_HOST")} onChange={(e) => onChange("SMTP_HOST", e.target.value)}
@@ -418,6 +541,10 @@ export default function SettingsClient({ initial, envFile }: Props) {
 
           {/* Webhook */}
           <Card title="Custom Webhook">
+            <div className="flex items-center justify-between -mt-1 mb-1">
+              <span className="text-xs text-muted-foreground">POST JSON to any URL</span>
+              <GuideButton guide="webhook" onOpen={setOpenGuide} />
+            </div>
             <Field label="Webhook URL">
               <div className="flex gap-2">
                 <div className="flex-1">
@@ -510,6 +637,202 @@ export default function SettingsClient({ initial, envFile }: Props) {
                 ))}
               </div>
             )}
+          </Card>
+        </div>
+      )}
+
+      {/* ── Ingest API keys ─────────────────────────────────────────────── */}
+      {tab === "ingest-keys" && (
+        <div className="space-y-4">
+          <Card title="HTTP ingest (lgk_ keys)">
+            <p className="text-xs text-muted-foreground mb-3">
+              Requires a JWT with <span className="font-mono">tenant_admin</span> or{" "}
+              <span className="font-mono">platform_admin</span> (or auth disabled in dev). Use{" "}
+              <span className="font-mono">Authorization: Bearer lgk_…</span> or{" "}
+              <span className="font-mono">X-API-Key</span> on <span className="font-mono">POST /api/v1/ingest/logs</span>.
+            </p>
+            <div className="flex gap-2 items-end">
+              <Field label="Name">
+                <Input
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                  placeholder="e.g. fluent-bit-prod"
+                  className="font-mono text-sm bg-card border-border"
+                />
+              </Field>
+              <button
+                type="button"
+                disabled={ingestKeysLoading || !newKeyName.trim()}
+                onClick={async () => {
+                  try {
+                    const res = await api.createTenantApiKey(newKeyName.trim());
+                    setJustCreatedKey(res.key);
+                    setNewKeyName("");
+                    await loadIngestKeys();
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : "Failed to create key");
+                  }
+                }}
+                className="px-3 py-2 rounded-md bg-cyan-400 text-black text-sm font-semibold hover:bg-cyan-300 disabled:opacity-40"
+              >
+                Create key
+              </button>
+            </div>
+            {justCreatedKey && (
+              <div className="mt-3 rounded-md border border-amber-500/50 bg-amber-950/30 px-3 py-2 text-xs">
+                <p className="text-amber-200 font-medium mb-1">Copy this secret now — it will not be shown again.</p>
+                <code className="break-all text-foreground select-all">{justCreatedKey}</code>
+                <button
+                  type="button"
+                  className="block mt-2 text-cyan-400 hover:underline"
+                  onClick={() => setJustCreatedKey(null)}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+            <div className="mt-4 rounded-md border border-border divide-y divide-border/50">
+              {ingestKeysLoading ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>
+              ) : ingestKeys.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">No keys yet.</div>
+              ) : (
+                ingestKeys.map((k) => (
+                  <div key={k.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+                    <div className="min-w-0">
+                      <div className="font-medium text-foreground truncate">{k.name}</div>
+                      <div className="font-mono text-muted-foreground">
+                        {k.key_prefix}… · {k.revoked_at ? "revoked" : "active"}
+                      </div>
+                    </div>
+                    {!k.revoked_at && (
+                      <button
+                        type="button"
+                        className="shrink-0 text-red-400 hover:underline"
+                        onClick={async () => {
+                          if (!confirm(`Revoke key “${k.name}”?`)) return;
+                          try {
+                            await api.revokeTenantApiKey(k.id);
+                            await loadIngestKeys();
+                          } catch (e) {
+                            alert(e instanceof Error ? e.message : "Revoke failed");
+                          }
+                        }}
+                      >
+                        Revoke
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Members tab ─────────────────────────────────────────────────── */}
+      {tab === "members" && (
+        <div className="space-y-4">
+          <Card title="Tenant members">
+            <p className="text-xs text-muted-foreground mb-3">
+              List and invite users by OIDC <span className="font-mono">sub</span>. Tenant admins and platform admins
+              can add or remove members. Members can view this list.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-3 mb-3">
+              <Field label="Subject (sub)">
+                <Input
+                  value={newMemberSubject}
+                  onChange={(e) => setNewMemberSubject(e.target.value)}
+                  placeholder="oidc-subject"
+                  className="font-mono text-sm bg-card border-border"
+                />
+              </Field>
+              <Field label="Email (optional)">
+                <Input
+                  value={newMemberEmail}
+                  onChange={(e) => setNewMemberEmail(e.target.value)}
+                  className="text-sm bg-card border-border"
+                />
+              </Field>
+              <Field label="Role">
+                <select
+                  value={newMemberRole}
+                  onChange={(e) => setNewMemberRole(e.target.value as "tenant_admin" | "tenant_member")}
+                  className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm"
+                >
+                  <option value="tenant_member">tenant_member</option>
+                  <option value="tenant_admin">tenant_admin</option>
+                </select>
+              </Field>
+            </div>
+            <button
+              type="button"
+              disabled={membersLoading || !newMemberSubject.trim()}
+              onClick={async () => {
+                try {
+                  await api.addTenantMember({
+                    subject: newMemberSubject.trim(),
+                    email: newMemberEmail.trim() || undefined,
+                    role: newMemberRole,
+                  });
+                  setNewMemberSubject("");
+                  setNewMemberEmail("");
+                  await loadMembers();
+                } catch (e) {
+                  alert(e instanceof Error ? e.message : "Add failed");
+                }
+              }}
+              className="px-3 py-2 rounded-md bg-cyan-400 text-black text-sm font-semibold disabled:opacity-40"
+            >
+              Add member
+            </button>
+
+            <div className="mt-4 rounded-md border border-border divide-y divide-border/50">
+              {membersLoading ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>
+              ) : members.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">No members.</div>
+              ) : (
+                members.map((m) => (
+                  <div key={m.membership_id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
+                    <div className="flex-1 min-w-[200px]">
+                      <div className="font-mono text-foreground">{m.subject}</div>
+                      <div className="text-muted-foreground">{m.email || "—"}</div>
+                    </div>
+                    <select
+                      value={m.role}
+                      onChange={async (e) => {
+                        try {
+                          await api.patchTenantMember(m.membership_id, { role: e.target.value });
+                          await loadMembers();
+                        } catch (err) {
+                          alert(err instanceof Error ? err.message : "Update failed");
+                        }
+                      }}
+                      className="rounded border border-border bg-background px-2 py-1"
+                    >
+                      <option value="tenant_member">tenant_member</option>
+                      <option value="tenant_admin">tenant_admin</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="text-red-400 hover:underline"
+                      onClick={async () => {
+                        if (!confirm(`Remove ${m.subject}?`)) return;
+                        try {
+                          await api.removeTenantMember(m.membership_id);
+                          await loadMembers();
+                        } catch (err) {
+                          alert(err instanceof Error ? err.message : "Remove failed");
+                        }
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </Card>
         </div>
       )}

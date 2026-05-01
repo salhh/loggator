@@ -99,6 +99,13 @@ services:
     environment:
       HOSTNAME: 0.0.0.0
       API_URL: http://api:8000/api/v1
+      # NextAuth (browser: http://localhost:3000)
+      AUTH_SECRET: ${AUTH_SECRET:-dev-only-change-for-production}
+      AUTH_URL: http://localhost:3000
+      AUTH_ALLOW_TOKEN_LOGIN: ${AUTH_ALLOW_TOKEN_LOGIN:-true}
+      NEXT_PUBLIC_AUTH_ALLOW_TOKEN: ${NEXT_PUBLIC_AUTH_ALLOW_TOKEN:-true}
+      NEXT_PUBLIC_AUTH_SSO_ENABLED: ${NEXT_PUBLIC_AUTH_SSO_ENABLED:-false}
+      # Optional OIDC: AUTH_ISSUER, AUTH_CLIENT_ID, AUTH_CLIENT_SECRET (set NEXT_PUBLIC_AUTH_SSO_ENABLED=true)
     depends_on:
       api:
         condition: service_healthy
