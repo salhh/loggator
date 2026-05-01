@@ -1,16 +1,15 @@
 """
 Alert channel registry backed by the app_settings table.
-Key format: "alert_channel:<id>" — value: JSON blob.
+Key format: "t:{tenant_id}:alert_channel:{id}" — value: JSON blob.
 """
 import json
 import uuid
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.db.models import AppSettings
-
-_PREFIX = "alert_channel:"
 
 # Sensitive fields to mask per channel type
 _MASKED: dict[str, set[str]] = {
@@ -19,6 +18,14 @@ _MASKED: dict[str, set[str]] = {
     "email":    set(),
     "webhook":  set(),
 }
+
+
+def _prefix(tenant_id: UUID) -> str:
+    return f"t:{tenant_id}:alert_channel:"
+
+
+def _row_key(tenant_id: UUID, id_: str) -> str:
+    return f"{_prefix(tenant_id)}{id_}"
 
 
 class AlertChannelNotFound(Exception):
@@ -36,55 +43,56 @@ def _mask_config(channel_type: str, config: dict) -> dict:
     return out
 
 
-def _row_to_dict(row: AppSettings, masked: bool = True) -> dict:
+def _row_to_dict(row: AppSettings, tenant_id: UUID, masked: bool = True) -> dict:
     data = json.loads(row.value)
-    data["id"] = row.key[len(_PREFIX):]
+    pfx = _prefix(tenant_id)
+    data["id"] = row.key[len(pfx):]
     data["updated_at"] = row.updated_at.isoformat() if row.updated_at else None
     if masked:
         data["config"] = _mask_config(data.get("type", ""), data.get("config", {}))
     return data
 
 
-async def list_channels(session: AsyncSession) -> list[dict]:
+async def list_channels(session: AsyncSession, tenant_id: UUID) -> list[dict]:
+    pfx = _prefix(tenant_id)
     result = await session.execute(
         select(AppSettings)
-        .where(AppSettings.key.like(f"{_PREFIX}%"))
+        .where(AppSettings.key.like(f"{pfx}%"))
         .order_by(AppSettings.updated_at.desc())
     )
-    return [_row_to_dict(r) for r in result.scalars()]
+    return [_row_to_dict(r, tenant_id) for r in result.scalars()]
 
 
-async def list_enabled_channels_raw(session: AsyncSession) -> list[dict]:
+async def list_enabled_channels_raw(session: AsyncSession, tenant_id: UUID) -> list[dict]:
     """Returns unmasked configs for all enabled channels — used by the dispatcher."""
-    result = await session.execute(
-        select(AppSettings).where(AppSettings.key.like(f"{_PREFIX}%"))
-    )
+    pfx = _prefix(tenant_id)
+    result = await session.execute(select(AppSettings).where(AppSettings.key.like(f"{pfx}%")))
     return [
-        _row_to_dict(r, masked=False)
+        _row_to_dict(r, tenant_id, masked=False)
         for r in result.scalars()
         if json.loads(r.value).get("enabled", True)
     ]
 
 
-async def get_channel_raw(session: AsyncSession, id: str) -> dict:
-    row = await session.get(AppSettings, f"{_PREFIX}{id}")
+async def get_channel_raw(session: AsyncSession, tenant_id: UUID, id: str) -> dict:
+    row = await session.get(AppSettings, _row_key(tenant_id, id))
     if not row:
         raise AlertChannelNotFound(id)
-    return _row_to_dict(row, masked=False)
+    return _row_to_dict(row, tenant_id, masked=False)
 
 
-async def create_channel(session: AsyncSession, data: dict) -> dict:
+async def create_channel(session: AsyncSession, tenant_id: UUID, data: dict) -> dict:
     id = uuid.uuid4().hex[:8]
     payload = {k: v for k, v in data.items() if k not in ("id", "updated_at")}
-    row = AppSettings(key=f"{_PREFIX}{id}", value=json.dumps(payload))
+    row = AppSettings(key=_row_key(tenant_id, id), value=json.dumps(payload))
     session.add(row)
     await session.commit()
     await session.refresh(row)
-    return _row_to_dict(row)
+    return _row_to_dict(row, tenant_id)
 
 
-async def update_channel(session: AsyncSession, id: str, data: dict) -> dict:
-    row = await session.get(AppSettings, f"{_PREFIX}{id}")
+async def update_channel(session: AsyncSession, tenant_id: UUID, id: str, data: dict) -> dict:
+    row = await session.get(AppSettings, _row_key(tenant_id, id))
     if not row:
         raise AlertChannelNotFound(id)
     existing = json.loads(row.value)
@@ -92,7 +100,6 @@ async def update_channel(session: AsyncSession, id: str, data: dict) -> dict:
     for k, v in data.items():
         if k in ("id", "updated_at"):
             continue
-        # Don't overwrite secrets if the caller sent back the masked placeholder
         if k == "config" and isinstance(v, dict):
             merged = dict(existing.get("config", {}))
             for ck, cv in v.items():
@@ -105,11 +112,11 @@ async def update_channel(session: AsyncSession, id: str, data: dict) -> dict:
     row.value = json.dumps(existing)
     await session.commit()
     await session.refresh(row)
-    return _row_to_dict(row)
+    return _row_to_dict(row, tenant_id)
 
 
-async def delete_channel(session: AsyncSession, id: str) -> None:
-    row = await session.get(AppSettings, f"{_PREFIX}{id}")
+async def delete_channel(session: AsyncSession, tenant_id: UUID, id: str) -> None:
+    row = await session.get(AppSettings, _row_key(tenant_id, id))
     if not row:
         raise AlertChannelNotFound(id)
     await session.delete(row)

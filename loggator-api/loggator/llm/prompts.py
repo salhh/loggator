@@ -30,7 +30,7 @@ INJECTION & WEB  (OWASP Top 10 / MITRE TA0001 — Initial Access)
   • T1059 — Command & Scripting Interpreter
       - SSRF targets: 169.254.x.x, 127.0.0.1, ::1, metadata.internal, 100.100.100.200
       - Shell metacharacters in HTTP params: ;, &&, $(), backtick substitution
-      - Template injection probes: {{7*7}}, ${7*7}, #{7*7}, <%=7*7%>
+      - Template injection probes: {{7*7}}, ${{7*7}}, #{{7*7}}, <%={{7*7}}%>
 
 INFRASTRUCTURE  (MITRE TA0004 — Privilege Escalation)
   • T1611 — Escape to Host
@@ -62,13 +62,13 @@ NETWORK & LATERAL MOVEMENT  (MITRE TA0008)
 
 ━━━ OUTPUT FORMAT ━━━
 Return ONLY a JSON object matching this exact schema (no prose, no markdown fences):
-{
+{{
   "anomalies":        ["<concise description of each finding>"],
   "severity":         "low" | "medium" | "high",
   "summary":          "<one-paragraph executive summary>",
   "root_cause_hints": ["<actionable investigation steps>"],
   "mitre_tactics":    ["<TID - Technique Name>", ...]
-}
+}}
 """
 
 ANOMALY_PROMPT: ChatPromptTemplate = ChatPromptTemplate.from_messages(
@@ -93,12 +93,12 @@ structured summary that captures:
 
 ━━━ OUTPUT FORMAT ━━━
 Return ONLY a JSON object (no prose, no markdown fences):
-{
+{{
   "summary":       "<paragraph summarising this chunk>",
   "top_issues":    ["<issue 1>", "<issue 2>", ...],
   "error_count":   <integer count of ERROR/CRITICAL/FATAL lines>,
   "recommendation":"<most urgent remediation action for this chunk, or empty string>"
-}
+}}
 """
 
 SUMMARY_MAP_PROMPT: ChatPromptTemplate = ChatPromptTemplate.from_messages(
@@ -125,12 +125,12 @@ Apply the same security lens as the chunk analysis:
 
 ━━━ OUTPUT FORMAT ━━━
 Return ONLY a JSON object (no prose, no markdown fences):
-{
+{{
   "summary":       "<merged executive summary paragraph>",
   "top_issues":    ["<ranked issue 1>", "<ranked issue 2>", ...],
   "error_count":   <total integer>,
   "recommendation":"<single highest-priority remediation action>"
-}
+}}
 """
 
 SUMMARY_REDUCE_PROMPT: ChatPromptTemplate = ChatPromptTemplate.from_messages(

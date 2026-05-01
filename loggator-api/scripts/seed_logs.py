@@ -1,11 +1,28 @@
-"""Seed fake logs into OpenSearch for local testing."""
+"""Seed fake logs into OpenSearch for local testing.
+
+Uses the same env vars as the API (OPENSEARCH_HOST, OPENSEARCH_PORT, etc.).
+From Docker stack: docker compose -f docker-compose.local.yml exec api python scripts/seed_logs.py
+"""
 import asyncio
+import os
 import random
 from datetime import datetime, timedelta, timezone
 
 from opensearchpy import AsyncOpenSearch
 
-INDEX = "logs-app-2024.01"
+
+def _env_bool(key: str, default: bool) -> bool:
+    v = os.environ.get(key)
+    if v is None:
+        return default
+    return v.strip().lower() in ("1", "true", "yes")
+
+
+INDEX = os.environ.get("LOG_SEED_INDEX", "logs-app-local")
+OS_HOST = os.environ.get("OPENSEARCH_HOST", "localhost")
+OS_PORT = int(os.environ.get("OPENSEARCH_PORT", "9200"))
+OS_USE_SSL = _env_bool("OPENSEARCH_USE_SSL", False)
+OS_VERIFY = _env_bool("OPENSEARCH_VERIFY_CERTS", True)
 
 SERVICES = ["auth-service", "payment-service", "api-gateway", "user-service", "notification-service"]
 LEVELS = ["INFO", "INFO", "INFO", "INFO", "WARN", "ERROR", "ERROR", "DEBUG"]
@@ -25,7 +42,11 @@ MESSAGES = [
 ]
 
 async def seed():
-    client = AsyncOpenSearch(hosts=[{"host": "localhost", "port": 9200}], use_ssl=False, verify_certs=False)
+    client = AsyncOpenSearch(
+        hosts=[{"host": OS_HOST, "port": OS_PORT}],
+        use_ssl=OS_USE_SSL,
+        verify_certs=OS_VERIFY,
+    )
 
     # Create index
     if not await client.indices.exists(index=INDEX):
@@ -56,7 +77,8 @@ async def seed():
 
     resp = await client.bulk(body=bulk_body, refresh=True)
     errors = [i for i in resp["items"] if "error" in i.get("index", {})]
-    print(f"Seeded {200 - len(errors)} logs into {INDEX}  ({len(errors)} errors)")
+    ok = 200 - len(errors)
+    print(f"Seeded {ok} logs into {INDEX} at {OS_HOST}:{OS_PORT} ({len(errors)} errors)")
     await client.close()
 
 

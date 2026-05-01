@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, Query
@@ -6,9 +7,9 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from loggator.config import settings
 from loggator.db.session import get_session
-from loggator.opensearch.client import get_client
+from loggator.opensearch.client import get_opensearch_for_tenant, get_effective_index_pattern
+from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(tags=["stats"])
 log = structlog.get_logger()
@@ -54,61 +55,73 @@ class StatsResponse(BaseModel):
 async def get_stats(
     days: int = Query(7, ge=1, le=30),
     session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
 ) -> StatsResponse:
     since = datetime.now(timezone.utc) - timedelta(days=days)
+    tid = str(tenant_id)
 
-    # ── PostgreSQL totals ──────────────────────────────────────────────────────
     total_summaries = (
         await session.execute(
-            text("SELECT COUNT(*) FROM summaries WHERE created_at >= :s"), {"s": since}
+            text(
+                "SELECT COUNT(*) FROM summaries WHERE tenant_id = CAST(:tid AS uuid) AND created_at >= :s"
+            ),
+            {"tid": tid, "s": since},
         )
     ).scalar_one()
 
     total_anomalies = (
         await session.execute(
-            text("SELECT COUNT(*) FROM anomalies WHERE detected_at >= :s"), {"s": since}
+            text(
+                "SELECT COUNT(*) FROM anomalies WHERE tenant_id = CAST(:tid AS uuid) AND detected_at >= :s"
+            ),
+            {"tid": tid, "s": since},
         )
     ).scalar_one()
 
     alerts_sent = (
         await session.execute(
-            text("SELECT COUNT(*) FROM alerts WHERE created_at >= :s AND status = 'sent'"),
-            {"s": since},
+            text(
+                "SELECT COUNT(*) FROM alerts WHERE tenant_id = CAST(:tid AS uuid) "
+                "AND created_at >= :s AND status = 'sent'"
+            ),
+            {"tid": tid, "s": since},
         )
     ).scalar_one()
 
     alerts_failed = (
         await session.execute(
-            text("SELECT COUNT(*) FROM alerts WHERE created_at >= :s AND status = 'failed'"),
-            {"s": since},
+            text(
+                "SELECT COUNT(*) FROM alerts WHERE tenant_id = CAST(:tid AS uuid) "
+                "AND created_at >= :s AND status = 'failed'"
+            ),
+            {"tid": tid, "s": since},
         )
     ).scalar_one()
 
-    # ── Daily summaries ────────────────────────────────────────────────────────
     r = await session.execute(
         text(
             "SELECT (created_at AT TIME ZONE 'UTC')::date::text AS d, COUNT(*) "
-            "FROM summaries WHERE created_at >= :s GROUP BY d"
+            "FROM summaries WHERE tenant_id = CAST(:tid AS uuid) AND created_at >= :s GROUP BY d"
         ),
-        {"s": since},
+        {"tid": tid, "s": since},
     )
     daily_summaries: dict[str, int] = {row[0]: row[1] for row in r.fetchall()}
 
     r = await session.execute(
         text(
             "SELECT (detected_at AT TIME ZONE 'UTC')::date::text AS d, COUNT(*) "
-            "FROM anomalies WHERE detected_at >= :s GROUP BY d"
+            "FROM anomalies WHERE tenant_id = CAST(:tid AS uuid) AND detected_at >= :s GROUP BY d"
         ),
-        {"s": since},
+        {"tid": tid, "s": since},
     )
     daily_anomalies: dict[str, int] = {row[0]: row[1] for row in r.fetchall()}
 
     r = await session.execute(
         text(
             "SELECT (created_at AT TIME ZONE 'UTC')::date::text AS d, COUNT(*) "
-            "FROM alerts WHERE created_at >= :s GROUP BY d"
+            "FROM alerts WHERE tenant_id = CAST(:tid AS uuid) AND created_at >= :s GROUP BY d"
         ),
-        {"s": since},
+        {"tid": tid, "s": since},
     )
     daily_alerts: dict[str, int] = {row[0]: row[1] for row in r.fetchall()}
 
@@ -124,12 +137,12 @@ async def get_stats(
             )
         )
 
-    # ── Anomalies by severity ──────────────────────────────────────────────────
     r = await session.execute(
         text(
-            "SELECT severity, COUNT(*) FROM anomalies WHERE detected_at >= :s GROUP BY severity"
+            "SELECT severity, COUNT(*) FROM anomalies "
+            "WHERE tenant_id = CAST(:tid AS uuid) AND detected_at >= :s GROUP BY severity"
         ),
-        {"s": since},
+        {"tid": tid, "s": since},
     )
     sev_map: dict[str, int] = {row[0]: row[1] for row in r.fetchall()}
     anomalies_by_severity: dict[str, int] = {**sev_map}
@@ -137,24 +150,24 @@ async def get_stats(
     anomalies_by_severity.setdefault("medium", 0)
     anomalies_by_severity.setdefault("high", 0)
 
-    # ── Alerts by channel ──────────────────────────────────────────────────────
     r = await session.execute(
         text(
-            "SELECT channel, COUNT(*) FROM alerts WHERE created_at >= :s GROUP BY channel"
+            "SELECT channel, COUNT(*) FROM alerts "
+            "WHERE tenant_id = CAST(:tid AS uuid) AND created_at >= :s GROUP BY channel"
         ),
-        {"s": since},
+        {"tid": tid, "s": since},
     )
     alerts_by_channel: dict[str, int] = {row[0]: row[1] for row in r.fetchall()}
 
-    # ── OpenSearch: log volume + top services (graceful degradation) ───────────
     log_volume: list[LogVolumeBucket] = []
     top_services: list[TopService] = []
 
     try:
-        os_client = get_client()
+        os_client = await get_opensearch_for_tenant(session, tenant_id)
+        index_pattern = await get_effective_index_pattern(session, tenant_id)
 
         vol_resp = await os_client.search(
-            index=settings.opensearch_index_pattern,
+            index=index_pattern,
             body={
                 "size": 0,
                 "query": {"range": {"@timestamp": {"gte": since.strftime("%Y-%m-%dT%H:%M:%SZ")}}},
@@ -188,7 +201,6 @@ async def get_stats(
                 )
             )
 
-        # Align log_volume to the same date range as `daily` (zero-fill missing days)
         lv_by_date = {b.date: b for b in log_volume}
         log_volume = []
         for i in range(days):
@@ -196,7 +208,7 @@ async def get_stats(
             log_volume.append(lv_by_date.get(d, LogVolumeBucket(date=d, error=0, warn=0, info=0)))
 
         svc_resp = await os_client.search(
-            index=settings.opensearch_index_pattern,
+            index=index_pattern,
             body={
                 "size": 0,
                 "query": {

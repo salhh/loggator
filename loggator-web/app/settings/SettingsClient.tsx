@@ -229,6 +229,8 @@ export default function SettingsClient({ initial, envFile }: Props) {
   const [saved, setSaved] = useState(false);
   const [scheduleStatus, setScheduleStatus] = useState<ScheduleStatus | null>(null);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [intervalInput, setIntervalInput] = useState("");
+  const [windowInput, setWindowInput] = useState("");
   const [testResults, setTestResults] = useState<Record<string, string>>({});
   const [testLoading, setTestLoading] = useState<Record<string, boolean>>({});
   const [openGuide, setOpenGuide] = useState<string | null>(null);
@@ -236,6 +238,12 @@ export default function SettingsClient({ initial, envFile }: Props) {
   useEffect(() => {
     api.scheduleStatus().then(setScheduleStatus).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!scheduleStatus) return;
+    setIntervalInput(String(scheduleStatus.interval_minutes));
+    setWindowInput(String(scheduleStatus.window_minutes));
+  }, [scheduleStatus]);
 
   function onChange(key: string, value: string) {
     setValues((p) => ({ ...p, [key]: value }));
@@ -250,8 +258,12 @@ export default function SettingsClient({ initial, envFile }: Props) {
     setScheduleLoading(true);
     try {
       setScheduleStatus(await api.updateSchedule(patch));
-    } catch { alert("Failed to update schedule."); }
-    finally { setScheduleLoading(false); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to update schedule.";
+      alert(msg);
+    } finally {
+      setScheduleLoading(false);
+    }
   }
 
   async function testChannel(channel: "slack" | "email" | "telegram" | "webhook") {
@@ -444,25 +456,43 @@ export default function SettingsClient({ initial, envFile }: Props) {
             </Field>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Interval (minutes)" helper="How often analysis runs">
+              <Field label="Interval (minutes)" helper="How often the scheduled RCA job runs (not the batch summarizer — that uses BATCH_INTERVAL_MINUTES in Advanced).">
                 <Input type="number" min={1} max={1440}
-                  defaultValue={scheduleStatus?.interval_minutes ?? 60}
-                  key={`interval-${scheduleStatus?.interval_minutes}`}
-                  onBlur={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) updateSchedule({ interval_minutes: v }); }}
-                  disabled={scheduleLoading}
+                  value={intervalInput}
+                  onChange={(e) => setIntervalInput(e.target.value)}
+                  disabled={scheduleLoading || !scheduleStatus}
                   className="font-mono text-sm bg-card border-border"
                 />
               </Field>
-              <Field label="Window (minutes)" helper="How far back each run looks">
+              <Field label="Window (minutes)" helper="How far back each RCA run looks in OpenSearch">
                 <Input type="number" min={1} max={1440}
-                  defaultValue={scheduleStatus?.window_minutes ?? 60}
-                  key={`window-${scheduleStatus?.window_minutes}`}
-                  onBlur={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) updateSchedule({ window_minutes: v }); }}
-                  disabled={scheduleLoading}
+                  value={windowInput}
+                  onChange={(e) => setWindowInput(e.target.value)}
+                  disabled={scheduleLoading || !scheduleStatus}
                   className="font-mono text-sm bg-card border-border"
                 />
               </Field>
             </div>
+            <button
+              type="button"
+              disabled={scheduleLoading || !scheduleStatus}
+              onClick={() => {
+                const iv = parseInt(intervalInput, 10);
+                const wv = parseInt(windowInput, 10);
+                if (isNaN(iv) || iv < 1 || iv > 1440) {
+                  alert("Interval must be between 1 and 1440.");
+                  return;
+                }
+                if (isNaN(wv) || wv < 1 || wv > 1440) {
+                  alert("Window must be between 1 and 1440.");
+                  return;
+                }
+                void updateSchedule({ interval_minutes: iv, window_minutes: wv });
+              }}
+              className="px-4 py-2 rounded-md bg-cyan-400 text-black text-sm font-semibold hover:bg-cyan-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {scheduleLoading ? "Saving…" : "Apply interval & window"}
+            </button>
 
             {scheduleStatus && (
               <div className="rounded-md bg-background border border-border divide-y divide-border/50">

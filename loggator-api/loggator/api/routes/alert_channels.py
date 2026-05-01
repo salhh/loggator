@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,44 +13,65 @@ from loggator.db.alert_registry import (
     AlertChannelNotFound,
 )
 from loggator.alerts.dispatcher import _FakeAnomaly, _send_slack, _send_telegram, _send_email, _send_webhook
+from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(tags=["alert-channels"])
 
 
 @router.get("/alert-channels")
-async def get_alert_channels(session: AsyncSession = Depends(get_session)):
-    return await list_channels(session)
+async def get_alert_channels(
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
+    return await list_channels(session, tenant_id)
 
 
 @router.post("/alert-channels", status_code=201)
-async def post_alert_channel(body: dict, session: AsyncSession = Depends(get_session)):
-    return await create_channel(session, body)
+async def post_alert_channel(
+    body: dict,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
+    return await create_channel(session, tenant_id, body)
 
 
 @router.put("/alert-channels/{id}")
-async def put_alert_channel(id: str, body: dict, session: AsyncSession = Depends(get_session)):
+async def put_alert_channel(
+    id: str,
+    body: dict,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
     try:
-        return await update_channel(session, id, body)
+        return await update_channel(session, tenant_id, id, body)
     except AlertChannelNotFound:
         raise HTTPException(status_code=404, detail="Channel not found")
 
 
 @router.delete("/alert-channels/{id}", status_code=204)
-async def del_alert_channel(id: str, session: AsyncSession = Depends(get_session)):
+async def del_alert_channel(
+    id: str,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
     try:
-        await delete_channel(session, id)
+        await delete_channel(session, tenant_id, id)
     except AlertChannelNotFound:
         raise HTTPException(status_code=404, detail="Channel not found")
 
 
 @router.post("/alert-channels/{id}/test")
-async def test_alert_channel(id: str, session: AsyncSession = Depends(get_session)):
+async def test_alert_channel(
+    id: str,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
     try:
-        ch = await get_channel_raw(session, id)
+        ch = await get_channel_raw(session, tenant_id, id)
     except AlertChannelNotFound:
         raise HTTPException(status_code=404, detail="Channel not found")
 
-    a = _FakeAnomaly()
+    a = _FakeAnomaly(tenant_id=tenant_id)
     cfg = ch.get("config", {})
     ch_type = ch.get("type", "")
 
@@ -58,7 +81,6 @@ async def test_alert_channel(id: str, session: AsyncSession = Depends(get_sessio
             if not webhook_url:
                 return {"ok": False, "error": "webhook_url not configured"}
             import httpx
-            from loggator.alerts.dispatcher import _build_payload
             severity_emoji = {"low": ":information_source:", "medium": ":warning:", "high": ":rotating_light:"}.get(a.severity, ":warning:")
             slack_body = {
                 "text": f"{severity_emoji} *Loggator Test Alert* — `{a.severity.upper()}`",

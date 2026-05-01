@@ -1,25 +1,28 @@
 import httpx
 import structlog
-from sqlalchemy import select, text
+from uuid import UUID
+
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.config import settings
-from loggator.db.models import LogEmbedding
 
 log = structlog.get_logger()
 
-_EMBED_URL = f"{settings.ollama_base_url}/api/embeddings"
-_EMBED_MODEL = "nomic-embed-text"
-
-
 async def _embed_query(query: str) -> list[float]:
+    url = f"{settings.ollama_base_url}/api/embeddings"
     async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(_EMBED_URL, json={"model": _EMBED_MODEL, "prompt": query})
+        resp = await client.post(
+            url,
+            json={"model": settings.ollama_embed_model, "prompt": query},
+        )
         resp.raise_for_status()
         return resp.json()["embedding"]
 
 
-async def retrieve(query: str, session: AsyncSession, top_k: int = 10) -> list[str]:
+async def retrieve(
+    query: str, session: AsyncSession, tenant_id: UUID, top_k: int = 10,
+) -> list[str]:
     """Return the top_k most semantically similar log lines for the query."""
     embedding = await _embed_query(query)
 
@@ -27,10 +30,11 @@ async def retrieve(query: str, session: AsyncSession, top_k: int = 10) -> list[s
     result = await session.execute(
         text(
             "SELECT text FROM log_embeddings "
+            "WHERE tenant_id = CAST(:tid AS uuid) "
             "ORDER BY embedding <=> CAST(:emb AS vector) "
             "LIMIT :k"
         ),
-        {"emb": str(embedding), "k": top_k},
+        {"tid": str(tenant_id), "emb": str(embedding), "k": top_k},
     )
     rows = result.fetchall()
     log.info("retriever.retrieved", count=len(rows), query=query[:80])

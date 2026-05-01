@@ -81,7 +81,7 @@ export default function ChatClient() {
       setIndexDone(true);
       setMessages((prev) => [...prev, {
         role: "assistant",
-        content: `✓ Indexing started for the last **${rangeLabel}** of logs${indexPattern ? ` (${indexPattern})` : ""} — up to ${maxLogs} entries. You can start asking questions now.`,
+        content: `✓ Indexing started for the last **${rangeLabel}** of logs${indexPattern ? ` (${indexPattern})` : ""} — up to ${maxLogs} entries. Wait **~1–2 minutes** for embeddings to finish, then ask questions (semantic search). Until then, chat still uses **recent OpenSearch logs** as fallback context.`,
       }]);
       setPanelOpen(false);
     } catch {
@@ -114,8 +114,9 @@ export default function ChatClient() {
     try {
       const res = await api.chat(userMsg);
       setMessages((prev) => [...prev, { role: "assistant", content: res.answer, contextLogs: res.context_logs }]);
-    } catch {
-      setMessages((prev) => [...prev, { role: "assistant", content: "Error: could not reach the API." }]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${msg}` }]);
     } finally {
       setLoading(false);
     }

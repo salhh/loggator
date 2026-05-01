@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +9,7 @@ from loggator.db.llm_registry import (
     list_llms, create_llm, update_llm, delete_llm, get_llm_raw, LLMNotFound
 )
 from loggator.llm.chain import LLMChain
+from loggator.tenancy.deps import get_effective_tenant_id
 from langchain_core.messages import HumanMessage
 
 router = APIRouter(prefix="/llms", tags=["llms"])
@@ -33,35 +36,55 @@ class LLMOut(BaseModel):
 
 
 @router.get("", response_model=list[LLMOut])
-async def list_all(session: AsyncSession = Depends(get_session)):
-    return await list_llms(session)
+async def list_all(
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
+    return await list_llms(session, tenant_id)
 
 
 @router.post("", response_model=LLMOut, status_code=201)
-async def create(body: LLMIn, session: AsyncSession = Depends(get_session)):
-    return await create_llm(session, body.model_dump())
+async def create(
+    body: LLMIn,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
+    return await create_llm(session, tenant_id, body.model_dump())
 
 
 @router.put("/{id}", response_model=LLMOut)
-async def update(id: str, body: LLMIn, session: AsyncSession = Depends(get_session)):
+async def update(
+    id: str,
+    body: LLMIn,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
     try:
-        return await update_llm(session, id, body.model_dump())
+        return await update_llm(session, tenant_id, id, body.model_dump())
     except LLMNotFound:
         raise HTTPException(404, "LLM not found")
 
 
 @router.delete("/{id}", status_code=204)
-async def delete(id: str, session: AsyncSession = Depends(get_session)):
+async def delete(
+    id: str,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
     try:
-        await delete_llm(session, id)
+        await delete_llm(session, tenant_id, id)
     except LLMNotFound:
         raise HTTPException(404, "LLM not found")
 
 
 @router.post("/{id}/test")
-async def test_llm(id: str, session: AsyncSession = Depends(get_session)):
+async def test_llm(
+    id: str,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
     try:
-        config = await get_llm_raw(session, id)
+        config = await get_llm_raw(session, tenant_id, id)
     except LLMNotFound:
         raise HTTPException(404, "LLM not found")
     try:

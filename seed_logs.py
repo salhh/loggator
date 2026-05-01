@@ -2,17 +2,20 @@
 Seed realistic error logs into OpenSearch to test the Loggator alerting flow.
 Run with: python seed_logs.py
 Requires: pip install opensearch-py
+
+Env: OPENSEARCH_HOST (default localhost), OPENSEARCH_PORT (default 9200),
+     LOG_SEED_INDEX (default logs-app-local). Matches API index pattern logs-*.
 """
-import json
+import os
 import random
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from opensearchpy import OpenSearch
 
-OS_HOST = "localhost"
-OS_PORT = 9200
-INDEX = "logs-app-2026.04.21"
+OS_HOST = os.environ.get("OPENSEARCH_HOST", "localhost")
+OS_PORT = int(os.environ.get("OPENSEARCH_PORT", "9200"))
+INDEX = os.environ.get("LOG_SEED_INDEX", "logs-app-local")
 
 client = OpenSearch(
     hosts=[{"host": OS_HOST, "port": OS_PORT}],

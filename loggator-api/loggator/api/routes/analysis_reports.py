@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.db.session import get_session
 from loggator.db.repository import ScheduledAnalysisRepository
+from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(prefix="/analysis-reports", tags=["analysis-reports"])
 
@@ -42,16 +43,21 @@ async def list_reports(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
 ):
-    return await ScheduledAnalysisRepository(session).list(
+    return await ScheduledAnalysisRepository(session, tenant_id).list(
         from_ts=from_ts, to_ts=to_ts, index_pattern=index,
         limit=limit, offset=offset,
     )
 
 
 @router.get("/{id}", response_model=ScheduledAnalysisOut)
-async def get_report(id: UUID, session: AsyncSession = Depends(get_session)):
-    record = await ScheduledAnalysisRepository(session).get(id)
+async def get_report(
+    id: UUID,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
+    record = await ScheduledAnalysisRepository(session, tenant_id).get(id)
     if not record:
         raise HTTPException(status_code=404, detail="Report not found")
     return record

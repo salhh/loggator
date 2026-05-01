@@ -27,6 +27,7 @@ dependencies = [
     "langchain-ollama>=0.3",
     "langchain-anthropic>=0.3",
     "langchain-openai>=0.3",
+    "python-jose[cryptography]>=3.5.0",
 ]
 
 [project.scripts]

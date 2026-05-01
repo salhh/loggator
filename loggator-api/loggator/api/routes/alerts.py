@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.db.session import get_session
 from loggator.db.repository import AlertRepository
+from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(tags=["alerts"])
 
@@ -41,8 +42,9 @@ async def list_alerts(
     offset: int = Query(0, ge=0),
     channel: Optional[str] = Query(None, description="Filter by channel: slack, email, telegram, webhook"),
     session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
 ):
-    return await AlertRepository(session).list(limit=limit, offset=offset, channel=channel)
+    return await AlertRepository(session, tenant_id).list(limit=limit, offset=offset, channel=channel)
 
 
 @router.post("/alerts/test", response_model=TestAlertOut)
@@ -63,7 +65,10 @@ async def register_webhook(body: WebhookIn):
 
 
 @router.post("/batch/trigger", status_code=202)
-async def trigger_batch(background_tasks: BackgroundTasks):
+async def trigger_batch(
+    background_tasks: BackgroundTasks,
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
     from loggator.pipelines.batch import run_batch
-    background_tasks.add_task(run_batch)
+    background_tasks.add_task(run_batch, None, None, tenant_id)
     return {"message": "Batch run triggered"}

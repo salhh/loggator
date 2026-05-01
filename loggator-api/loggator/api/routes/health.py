@@ -3,16 +3,19 @@ import asyncio
 import time
 from datetime import datetime, timezone
 from typing import Literal
+from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.config import settings
-from loggator.db.session import AsyncSessionLocal
-from loggator.opensearch.client import get_client
+from loggator.db.session import AsyncSessionLocal, get_session
+from loggator.opensearch.client import get_opensearch_for_tenant, get_effective_index_pattern
 from loggator.pipelines.scheduler import get_scheduler
+from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(tags=["health"])
 
@@ -46,14 +49,15 @@ async def _check_database() -> CheckResult:
         return CheckResult(ok=False, latency_ms=int((time.monotonic() - t0) * 1000), detail=str(exc)[:120])
 
 
-async def _check_opensearch() -> CheckResult:
+async def _check_opensearch(session: AsyncSession, tenant_id: UUID) -> CheckResult:
     t0 = time.monotonic()
     try:
         async def _query():
-            client = get_client()
+            client = await get_opensearch_for_tenant(session, tenant_id)
+            pattern = await get_effective_index_pattern(session, tenant_id)
             health = await client.cluster.health()
             indices = await client.cat.indices(
-                index=settings.opensearch_index_pattern, h="index", format="json"
+                index=pattern, h="index", format="json"
             )
             count = len(indices) if isinstance(indices, list) else 0
             colour = health.get("status", "unknown")
@@ -128,10 +132,15 @@ async def _check_alerts() -> CheckResult:
 
 
 @router.get("/health")
-async def get_health(response: Response) -> HealthResponse:
-    db, os_, llm, sched, alerts = await asyncio.gather(
-        _check_database(),
-        _check_opensearch(),
+async def get_health(
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+) -> HealthResponse:
+    # DB and OpenSearch checks use the request session — run sequentially (asyncpg session is not concurrent-safe).
+    db = await _check_database()
+    os_ = await _check_opensearch(session, tenant_id)
+    llm, sched, alerts = await asyncio.gather(
         _check_llm(),
         _check_scheduler(),
         _check_alerts(),

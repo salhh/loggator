@@ -92,7 +92,9 @@ async def test_sensitive_query_params_redacted(app):
     """Sensitive params in query string are redacted before writing to audit_log."""
     written_rows = []
 
-    async def fake_write(request_id, method, path, status_code, duration_ms, client_ip, query_params, error_detail):
+    async def fake_write(
+        request_id, method, path, status_code, duration_ms, client_ip, query_params, error_detail, tenant_id=None,
+    ):
         written_rows.append(query_params)
 
     with patch("loggator.observability.middleware._write_audit_row", side_effect=fake_write):

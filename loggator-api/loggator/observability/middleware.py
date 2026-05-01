@@ -10,6 +10,7 @@ AuditLogMiddleware — records every API request to the audit_log table.
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from uuid import UUID
 
 import structlog
 from starlette.background import BackgroundTask
@@ -44,6 +45,16 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def _tenant_id_from_request(request: Request) -> UUID | None:
+    raw = request.headers.get("X-Tenant-Id")
+    if not raw:
+        return None
+    try:
+        return UUID(raw.strip())
+    except ValueError:
+        return None
+
+
 async def _write_audit_row(
     request_id: str,
     method: str,
@@ -53,10 +64,14 @@ async def _write_audit_row(
     client_ip: str,
     query_params: dict | None,
     error_detail: str | None,
+    tenant_id: UUID | None = None,
+    actor_id: str | None = None,
+    actor_type: str | None = None,
 ) -> None:
     try:
         async with AsyncSessionLocal() as session:
             row = AuditLog(
+                tenant_id=tenant_id,
                 request_id=request_id,
                 method=method,
                 path=path,
@@ -65,6 +80,8 @@ async def _write_audit_row(
                 client_ip=client_ip,
                 query_params=query_params if query_params else None,
                 error_detail=error_detail,
+                actor_id=actor_id,
+                actor_type=actor_type,
             )
             session.add(row)
             await session.commit()
@@ -79,6 +96,7 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
         request_id = str(uuid.uuid4())
         client_ip = _get_client_ip(request)
+        tenant_id = _tenant_id_from_request(request)
         query_params = _sanitize_params(dict(request.query_params))
 
         # Bind to structlog context so all log lines in this request carry request_id
@@ -95,19 +113,27 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
             except Exception as exc:
                 error_detail = str(exc)
                 duration_ms = int((time.monotonic() - start) * 1000)
+                user = getattr(request.state, "user_claims", None)
                 await _write_audit_row(
                     request_id, request.method, request.url.path,
                     status_code, duration_ms, client_ip, query_params, error_detail,
+                    tenant_id,
+                    actor_id=getattr(user, "user_id", None) if user else None,
+                    actor_type="user" if user else None,
                 )
                 raise
 
             duration_ms = int((time.monotonic() - start) * 1000)
             response.headers["X-Request-ID"] = request_id
+            user = getattr(request.state, "user_claims", None)
             response.background = BackgroundTask(
                 _write_audit_row,
                 request_id, request.method, request.url.path,
                 status_code, duration_ms, client_ip, query_params,
                 error_detail if status_code >= 500 else None,
+                tenant_id,
+                getattr(user, "user_id", None) if user else None,
+                "user" if user else None,
             )
             return response
         finally:

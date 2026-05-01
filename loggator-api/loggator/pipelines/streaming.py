@@ -1,18 +1,20 @@
 import asyncio
 import structlog
 from datetime import datetime, timezone
+from uuid import UUID
 
 from loggator.config import settings
 from loggator.db.session import AsyncSessionLocal
 from loggator.db.models import Anomaly
 from loggator.db.repository import CheckpointRepository, AnomalyRepository
-from loggator.opensearch.client import get_client
+from loggator.opensearch.client import get_opensearch_for_tenant, get_effective_index_pattern
 from loggator.opensearch.queries import search_after_logs
 from loggator.processing.preprocessor import preprocess
 from loggator.processing.chunker import chunk_docs
 from loggator.processing.mapreduce import analyze_chunks_for_anomalies
 from loggator.alerts.dispatcher import dispatch
 from loggator.observability import system_event_writer
+from loggator.tenancy.bootstrap import get_default_tenant_id
 
 log = structlog.get_logger()
 
@@ -20,7 +22,9 @@ _running = False
 _task: asyncio.Task | None = None
 
 
-async def _process_batch(docs: list[dict], index_pattern: str, session) -> list[Anomaly]:
+async def _process_batch(
+    docs: list[dict], index_pattern: str, session, tenant_id: UUID,
+) -> list[Anomaly]:
     """Preprocess → chunk → analyze → save anomalies → dispatch alerts."""
     docs = preprocess(docs)
     if not docs:
@@ -30,7 +34,7 @@ async def _process_batch(docs: list[dict], index_pattern: str, session) -> list[
     raw_results = await analyze_chunks_for_anomalies(chunks)
 
     saved: list[Anomaly] = []
-    repo = AnomalyRepository(session)
+    repo = AnomalyRepository(session, tenant_id)
 
     for result in raw_results:
         if not result.get("anomalies"):
@@ -44,6 +48,7 @@ async def _process_batch(docs: list[dict], index_pattern: str, session) -> list[
             continue
 
         anomaly = Anomaly(
+            tenant_id=tenant_id,
             index_pattern=index_pattern,
             severity=severity,
             summary=summary,
@@ -55,7 +60,6 @@ async def _process_batch(docs: list[dict], index_pattern: str, session) -> list[
         anomaly = await repo.save(anomaly)
         saved.append(anomaly)
 
-        # Broadcast to WebSocket clients
         try:
             from loggator.api.websocket import broadcast
             await broadcast({
@@ -69,7 +73,6 @@ async def _process_batch(docs: list[dict], index_pattern: str, session) -> list[
         except Exception:
             pass
 
-        # Dispatch alerts (Slack / email / webhook)
         await dispatch(anomaly, session)
         await system_event_writer.write(
             service="streaming",
@@ -90,14 +93,17 @@ async def run_streaming_worker(index_pattern: str | None = None) -> None:
     """Continuously tail OpenSearch using search_after, detect anomalies in real time."""
     global _running
     _running = True
-    index_pattern = index_pattern or settings.opensearch_index_pattern
-    log.info("streaming.started", index_pattern=index_pattern)
 
-    os_client = get_client()
-
-    # Resume from last checkpoint
     async with AsyncSessionLocal() as session:
-        cp_repo = CheckpointRepository(session)
+        tenant_id = await get_default_tenant_id(session)
+        resolved_index = index_pattern or await get_effective_index_pattern(session, tenant_id)
+        os_client = await get_opensearch_for_tenant(session, tenant_id)
+
+    index_pattern = resolved_index
+    log.info("streaming.started", index_pattern=index_pattern, tenant_id=str(tenant_id))
+
+    async with AsyncSessionLocal() as session:
+        cp_repo = CheckpointRepository(session, tenant_id)
         checkpoint = await cp_repo.get(index_pattern)
         sort_cursor = checkpoint.last_sort if checkpoint else None
 
@@ -113,12 +119,12 @@ async def run_streaming_worker(index_pattern: str | None = None) -> None:
             if docs:
                 log.info("streaming.fetched", count=len(docs), index_pattern=index_pattern)
                 async with AsyncSessionLocal() as session:
-                    await _process_batch(docs, index_pattern, session)
+                    await _process_batch(docs, index_pattern, session, tenant_id)
 
                 sort_cursor = new_cursor
                 if new_cursor:
                     async with AsyncSessionLocal() as session:
-                        cp_repo = CheckpointRepository(session)
+                        cp_repo = CheckpointRepository(session, tenant_id)
                         await cp_repo.upsert(
                             index_pattern=index_pattern,
                             last_sort=new_cursor,

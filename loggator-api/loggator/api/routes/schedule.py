@@ -1,19 +1,24 @@
 from pathlib import Path
 from typing import Optional
+from uuid import UUID
 
 from apscheduler.triggers.interval import IntervalTrigger
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from loggator.config import settings
 from loggator.db.session import AsyncSessionLocal
 from loggator.db.repository import ScheduledAnalysisRepository
+from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
-# Path to the .env file used by the container
 import os as _os
-_ENV_PATH = Path(_os.environ.get("ENV_FILE_PATH", Path(__file__).resolve().parents[4] / ".env"))
+
+# Must match ``settings.py`` — ``parents[4]`` from this file incorrectly resolves to filesystem root.
+_ENV_PATH = Path(
+    _os.environ.get("ENV_FILE_PATH", Path(__file__).resolve().parent.parent.parent.parent / ".env")
+)
 
 
 class ScheduleStatusOut(BaseModel):
@@ -31,9 +36,9 @@ class ScheduleUpdateIn(BaseModel):
     window_minutes: Optional[int] = Field(None, ge=1, le=1440)
 
 
-@router.get("/status", response_model=ScheduleStatusOut)
-async def get_schedule_status():
+async def _build_schedule_status(tenant_id: UUID) -> ScheduleStatusOut:
     from loggator.pipelines.scheduler import get_scheduler
+
     scheduler = get_scheduler()
     next_run_at = None
     if scheduler and scheduler.running:
@@ -42,7 +47,7 @@ async def get_schedule_status():
             next_run_at = job.next_run_time.isoformat()
 
     async with AsyncSessionLocal() as session:
-        latest = await ScheduledAnalysisRepository(session).get_latest()
+        latest = await ScheduledAnalysisRepository(session, tenant_id).get_latest()
 
     return ScheduleStatusOut(
         enabled=settings.analysis_enabled,
@@ -54,32 +59,42 @@ async def get_schedule_status():
     )
 
 
+@router.get("/status", response_model=ScheduleStatusOut)
+async def get_schedule_status(tenant_id: UUID = Depends(get_effective_tenant_id)):
+    return await _build_schedule_status(tenant_id)
+
+
 @router.put("", response_model=ScheduleStatusOut)
-async def update_schedule(body: ScheduleUpdateIn):
+async def update_schedule(
+    body: ScheduleUpdateIn,
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
     """Update schedule config and live-reschedule the APScheduler job."""
     from loggator.pipelines.scheduler import get_scheduler
 
     updates: dict[str, str] = {}
 
     if body.enabled is not None:
-        settings.analysis_enabled = body.enabled
+        settings.__dict__["analysis_enabled"] = bool(body.enabled)
         updates["ANALYSIS_ENABLED"] = str(body.enabled).lower()
 
     if body.interval_minutes is not None:
-        settings.analysis_interval_minutes = body.interval_minutes
+        settings.__dict__["analysis_interval_minutes"] = int(body.interval_minutes)
         updates["ANALYSIS_INTERVAL_MINUTES"] = str(body.interval_minutes)
 
     if body.window_minutes is not None:
-        settings.analysis_window_minutes = body.window_minutes
+        settings.__dict__["analysis_window_minutes"] = int(body.window_minutes)
         updates["ANALYSIS_WINDOW_MINUTES"] = str(body.window_minutes)
 
-    # Persist to .env for restarts
-    if updates and _ENV_PATH.exists():
+    if updates:
+        if not _ENV_PATH.exists():
+            _ENV_PATH.write_text("", encoding="utf-8")
         lines = _ENV_PATH.read_text(encoding="utf-8").splitlines()
         for key, val in updates.items():
             replaced = False
             for i, line in enumerate(lines):
-                if line.startswith(f"{key}="):
+                stripped = line.strip()
+                if stripped.startswith(f"{key}=") or stripped.startswith(f"{key} ="):
                     lines[i] = f"{key}={val}"
                     replaced = True
                     break
@@ -87,7 +102,6 @@ async def update_schedule(body: ScheduleUpdateIn):
                 lines.append(f"{key}={val}")
         _ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    # Live-reschedule the APScheduler job
     scheduler = get_scheduler()
     if scheduler and scheduler.running and body.interval_minutes is not None:
         scheduler.reschedule_job(
@@ -95,4 +109,4 @@ async def update_schedule(body: ScheduleUpdateIn):
             trigger=IntervalTrigger(minutes=body.interval_minutes),
         )
 
-    return await get_schedule_status()
+    return await _build_schedule_status(tenant_id)

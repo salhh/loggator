@@ -1,12 +1,14 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.db.models import AuditLog
 from loggator.db.session import get_session
+from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(tags=["observability"])
 
@@ -38,6 +40,7 @@ async def list_audit_log(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
 ) -> list[dict[str, Any]]:
     now = datetime.now(timezone.utc)
     effective_from = from_ts or (now - timedelta(hours=24))
@@ -46,6 +49,7 @@ async def list_audit_log(
     filters: list = [
         AuditLog.timestamp >= effective_from,
         AuditLog.timestamp <= effective_to,
+        or_(AuditLog.tenant_id.is_(None), AuditLog.tenant_id == tenant_id),
     ]
     if path:
         filters.append(AuditLog.path.startswith(path))

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 import structlog
 
@@ -6,12 +7,13 @@ from loggator.config import settings
 from loggator.db.models import Summary, ScheduledAnalysis
 from loggator.db.session import AsyncSessionLocal
 from loggator.db.repository import SummaryRepository, ScheduledAnalysisRepository
-from loggator.opensearch.client import get_client
+from loggator.opensearch.client import get_opensearch_for_tenant, get_effective_index_pattern
 from loggator.opensearch.queries import range_query_logs
 from loggator.processing.preprocessor import preprocess
 from loggator.processing.chunker import chunk_docs
 from loggator.processing.mapreduce import summarize_chunks, analyze_chunks
 from loggator.observability import system_event_writer
+from loggator.tenancy.bootstrap import get_default_tenant_id
 
 log = structlog.get_logger()
 
@@ -29,13 +31,19 @@ def _active_model() -> str:
 async def run_batch(
     window_minutes: int | None = None,
     index_pattern: str | None = None,
+    tenant_id: UUID | None = None,
 ) -> Summary | None:
     """
     Fetch logs from the last N minutes, run map-reduce summarization via LLM chain,
     and persist the result to PostgreSQL. Returns the saved Summary or None on error.
+    ``tenant_id`` defaults to the bootstrap tenant when omitted (scheduler jobs).
     """
     window = window_minutes or settings.batch_window_minutes
-    index = index_pattern or settings.opensearch_index_pattern
+
+    async with AsyncSessionLocal() as session:
+        tid = tenant_id or await get_default_tenant_id(session)
+        index = index_pattern or await get_effective_index_pattern(session, tid)
+        os_client = await get_opensearch_for_tenant(session, tid)
 
     now = datetime.now(timezone.utc)
     from_ts = now - timedelta(minutes=window)
@@ -49,9 +57,7 @@ async def run_batch(
         details={"index": index, "window_minutes": window, "from_ts": from_ts.isoformat()},
     )
 
-    # ── 1. Fetch logs from OpenSearch ─────────────────────────────────────────
     try:
-        os_client = get_client()
         raw_docs = await range_query_logs(os_client, index, from_ts, now)
     except Exception as exc:
         log.error("batch.opensearch.failed", error=str(exc))
@@ -70,17 +76,14 @@ async def run_batch(
 
     log.info("batch.fetched", count=len(raw_docs))
 
-    # ── 2. Preprocess ─────────────────────────────────────────────────────────
     clean_docs = preprocess(raw_docs)
     if not clean_docs:
         log.info("batch.all_filtered")
         return None
 
-    # ── 3. Chunk ──────────────────────────────────────────────────────────────
     chunks = chunk_docs(clean_docs)
     log.info("batch.chunked", chunks=len(chunks))
 
-    # ── 4. Map-reduce summarize via LLM chain ─────────────────────────────────
     try:
         result = await summarize_chunks(chunks)
     except Exception as exc:
@@ -108,8 +111,8 @@ async def run_batch(
         },
     )
 
-    # ── 5. Persist to PostgreSQL ───────────────────────────────────────────────
     summary = Summary(
+        tenant_id=tid,
         window_start=from_ts,
         window_end=now,
         index_pattern=index,
@@ -122,7 +125,7 @@ async def run_batch(
     )
 
     async with AsyncSessionLocal() as session:
-        repo = SummaryRepository(session)
+        repo = SummaryRepository(session, tid)
         saved = await repo.save(summary)
 
     log.info("batch.saved", summary_id=str(saved.id), error_count=saved.error_count)
@@ -149,24 +152,24 @@ async def run_scheduled_analysis(
     Saves the RCA result to scheduled_analyses. Skips if window already analysed.
     """
     window = window_minutes or settings.analysis_window_minutes
-    index = index_pattern or settings.opensearch_index_pattern
     now = datetime.now(timezone.utc)
     from_ts = now - timedelta(minutes=window)
 
-    log.info("scheduled_analysis.start", index=index, window_minutes=window,
-             from_ts=from_ts.isoformat(), to_ts=now.isoformat())
-
-    # 0. Dedup check
     async with AsyncSessionLocal() as session:
-        existing = await ScheduledAnalysisRepository(session).find_by_window(from_ts, now)
+        tenant_id = await get_default_tenant_id(session)
+        index = index_pattern or await get_effective_index_pattern(session, tenant_id)
+        existing = await ScheduledAnalysisRepository(session, tenant_id).find_by_window(from_ts, now)
         if existing:
             log.info("scheduled_analysis.skipped", reason="duplicate_window",
                      existing_id=str(existing.id))
             return None
 
-    # 1. Fetch logs
+    log.info("scheduled_analysis.start", index=index, window_minutes=window,
+             from_ts=from_ts.isoformat(), to_ts=now.isoformat())
+
     try:
-        os_client = get_client()
+        async with AsyncSessionLocal() as session:
+            os_client = await get_opensearch_for_tenant(session, tenant_id)
         raw_docs = await range_query_logs(os_client, index, from_ts, now)
     except Exception as exc:
         log.error("scheduled_analysis.opensearch.failed", error=str(exc))
@@ -176,7 +179,6 @@ async def run_scheduled_analysis(
         log.info("scheduled_analysis.no_logs")
         return None
 
-    # 2. Preprocess + chunk
     clean_docs = preprocess(raw_docs)
     if not clean_docs:
         log.info("scheduled_analysis.all_filtered")
@@ -186,11 +188,11 @@ async def run_scheduled_analysis(
     log.info("scheduled_analysis.chunked", chunks=len(chunks))
     status = "success"
 
-    # 3. Batch summary (non-fatal)
     try:
         summary_result = await summarize_chunks(chunks)
         async with AsyncSessionLocal() as session:
-            await SummaryRepository(session).save(Summary(
+            await SummaryRepository(session, tenant_id).save(Summary(
+                tenant_id=tenant_id,
                 window_start=from_ts, window_end=now, index_pattern=index,
                 summary=summary_result.get("summary", ""),
                 top_issues=summary_result.get("top_issues", []),
@@ -202,7 +204,6 @@ async def run_scheduled_analysis(
     except Exception as exc:
         log.error("scheduled_analysis.summary.failed", error=str(exc))
 
-    # 4. Deep RCA
     try:
         rca = await analyze_chunks(chunks)
     except Exception as exc:
@@ -215,8 +216,8 @@ async def run_scheduled_analysis(
             "error_count": 0, "warning_count": 0,
         }
 
-    # 5. Persist RCA
     record = ScheduledAnalysis(
+        tenant_id=tenant_id,
         window_start=from_ts, window_end=now, index_pattern=index,
         summary=rca.get("summary", ""),
         affected_services=rca.get("affected_services", []),
@@ -229,7 +230,7 @@ async def run_scheduled_analysis(
         model_used=_active_model(), status=status,
     )
     async with AsyncSessionLocal() as session:
-        saved = await ScheduledAnalysisRepository(session).save(record)
+        saved = await ScheduledAnalysisRepository(session, tenant_id).save(record)
 
     log.info("scheduled_analysis.saved", id=str(saved.id), status=status)
     return saved

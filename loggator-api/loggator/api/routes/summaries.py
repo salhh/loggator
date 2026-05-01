@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.db.session import get_session
 from loggator.db.repository import SummaryRepository
+from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(prefix="/summaries", tags=["summaries"])
 
@@ -37,14 +38,19 @@ async def list_summaries(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
 ):
-    repo = SummaryRepository(session)
+    repo = SummaryRepository(session, tenant_id)
     return await repo.list(from_ts=from_ts, to_ts=to_ts, index_pattern=index, limit=limit, offset=offset)
 
 
 @router.get("/{id}", response_model=SummaryOut)
-async def get_summary(id: UUID, session: AsyncSession = Depends(get_session)):
-    repo = SummaryRepository(session)
+async def get_summary(
+    id: UUID,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
+    repo = SummaryRepository(session, tenant_id)
     summary = await repo.get(id)
     if not summary:
         raise HTTPException(status_code=404, detail="Summary not found")

@@ -131,9 +131,11 @@ def report():
 async def _report():
     from loggator.db.session import AsyncSessionLocal
     from loggator.db.repository import SummaryRepository
+    from loggator.tenancy.bootstrap import get_default_tenant_id
 
     async with AsyncSessionLocal() as session:
-        repo = SummaryRepository(session)
+        tenant_id = await get_default_tenant_id(session)
+        repo = SummaryRepository(session, tenant_id)
         summary = await repo.get_latest()
 
     if not summary:
@@ -164,6 +166,7 @@ def watch():
 async def _watch():
     from loggator.db.session import AsyncSessionLocal
     from loggator.db.repository import AnomalyRepository
+    from loggator.tenancy.bootstrap import get_default_tenant_id
     import time
 
     console.print("[cyan]Watching for anomalies... (Ctrl+C to stop)[/cyan]\n")
@@ -172,7 +175,8 @@ async def _watch():
     try:
         while True:
             async with AsyncSessionLocal() as session:
-                repo = AnomalyRepository(session)
+                tenant_id = await get_default_tenant_id(session)
+                repo = AnomalyRepository(session, tenant_id)
                 anomalies = await repo.list(limit=20)
 
             for a in reversed(anomalies):
@@ -200,9 +204,11 @@ def alerts():
 async def _alerts():
     from loggator.db.session import AsyncSessionLocal
     from loggator.db.repository import AlertRepository
+    from loggator.tenancy.bootstrap import get_default_tenant_id
 
     async with AsyncSessionLocal() as session:
-        repo = AlertRepository(session)
+        tenant_id = await get_default_tenant_id(session)
+        repo = AlertRepository(session, tenant_id)
         rows = await repo.list(limit=20)
 
     if not rows:

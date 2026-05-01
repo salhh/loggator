@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.db.session import get_session
 from loggator.db.repository import AnomalyRepository
+from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
 
@@ -37,8 +38,9 @@ async def list_anomalies(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
 ):
-    repo = AnomalyRepository(session)
+    repo = AnomalyRepository(session, tenant_id)
     severity_list = [s.strip() for s in severity.split(",")] if severity else None
     return await repo.list(
         severity=severity_list, from_ts=from_ts, to_ts=to_ts,
@@ -47,8 +49,12 @@ async def list_anomalies(
 
 
 @router.get("/{id}", response_model=AnomalyOut)
-async def get_anomaly(id: UUID, session: AsyncSession = Depends(get_session)):
-    repo = AnomalyRepository(session)
+async def get_anomaly(
+    id: UUID,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
+    repo = AnomalyRepository(session, tenant_id)
     anomaly = await repo.get(id)
     if not anomaly:
         raise HTTPException(status_code=404, detail="Anomaly not found")

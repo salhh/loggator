@@ -19,7 +19,18 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      if (typeof j.detail === "string") detail = j.detail;
+      else if (Array.isArray(j.detail))
+        detail = j.detail.map((x: { msg?: string }) => x.msg ?? JSON.stringify(x)).join("; ");
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail || `API error ${res.status}: ${path}`);
+  }
   return res.json();
 }
 
@@ -29,7 +40,16 @@ async function put<T>(path: string, body: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      if (typeof j.detail === "string") detail = j.detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail || `API error ${res.status}: ${path}`);
+  }
   return res.json();
 }
 

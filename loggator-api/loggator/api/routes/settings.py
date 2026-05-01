@@ -2,9 +2,18 @@ import os
 import re
 from pathlib import Path
 from typing import Optional
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from loggator.config import settings as _settings
+from loggator.db.models import TenantConnection
+from loggator.db.session import get_session
+from loggator.opensearch.client import get_effective_index_pattern
+from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(tags=["settings"])
 
@@ -38,11 +47,16 @@ class SettingsOut(BaseModel):
 class SettingsIn(BaseModel):
     updates: dict[str, str]
 
+class EffectiveSettingsOut(BaseModel):
+    tenant_id: UUID
+    opensearch: dict[str, str | int | bool]
+    llm: dict[str, str | int | bool]
+    schedule: dict[str, str | int | bool]
 
 @router.get("/settings", response_model=SettingsOut)
 async def get_settings():
     if not _ENV_PATH.exists():
-        raise HTTPException(status_code=404, detail=f".env file not found at {_ENV_PATH}")
+        return SettingsOut(settings={}, env_file=str(_ENV_PATH))
     raw = _ENV_PATH.read_text(encoding="utf-8")
     parsed = _parse_env(raw)
     masked = {k: _mask(k, v) for k, v in parsed.items()}
@@ -52,7 +66,7 @@ async def get_settings():
 @router.put("/settings", response_model=SettingsOut)
 async def update_settings(body: SettingsIn):
     if not _ENV_PATH.exists():
-        raise HTTPException(status_code=404, detail=f".env file not found at {_ENV_PATH}")
+        _ENV_PATH.write_text("", encoding="utf-8")
 
     raw = _ENV_PATH.read_text(encoding="utf-8")
     lines = raw.splitlines()
@@ -91,3 +105,53 @@ async def update_settings(body: SettingsIn):
     parsed = _parse_env("\n".join(lines))
     masked = {k: _mask(k, v) for k, v in parsed.items()}
     return SettingsOut(settings=masked, env_file=str(_ENV_PATH))
+
+
+@router.get("/settings/effective", response_model=EffectiveSettingsOut)
+async def get_effective_settings(
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+):
+    """
+    Tenant-scoped effective settings (redacted).
+
+    This is intended for UI/runtime visibility. It merges tenant connection values with
+    process-wide defaults without exposing secrets (passwords, API keys).
+    """
+    result = await session.execute(
+        select(TenantConnection).where(TenantConnection.tenant_id == tenant_id).limit(1)
+    )
+    conn = result.scalar_one_or_none()
+    index_pattern = await get_effective_index_pattern(session, tenant_id)
+
+    opensearch = {
+        "configured": bool(conn and conn.opensearch_host and str(conn.opensearch_host).strip()),
+        "host": str(conn.opensearch_host) if conn and conn.opensearch_host else _settings.opensearch_host,
+        "port": int(conn.opensearch_port) if conn and conn.opensearch_port is not None else int(_settings.opensearch_port),
+        "auth_type": str(conn.opensearch_auth_type) if conn and conn.opensearch_auth_type else str(_settings.opensearch_auth_type),
+        "use_ssl": bool(conn.opensearch_use_ssl) if conn and conn.opensearch_use_ssl is not None else bool(_settings.opensearch_use_ssl),
+        "verify_certs": bool(conn.opensearch_verify_certs) if conn and conn.opensearch_verify_certs is not None else bool(_settings.opensearch_verify_certs),
+        "index_pattern": str(index_pattern),
+    }
+
+    llm = {
+        "provider": _settings.llm_provider,
+        "ollama_base_url": _settings.ollama_base_url,
+        "ollama_model": _settings.ollama_model,
+        "ollama_embed_model": _settings.ollama_embed_model,
+        "llm_timeout": int(_settings.llm_timeout),
+        "llm_concurrency": int(_settings.llm_concurrency),
+    }
+
+    schedule = {
+        "analysis_enabled": bool(_settings.analysis_enabled),
+        "analysis_interval_minutes": int(_settings.analysis_interval_minutes),
+        "analysis_window_minutes": int(_settings.analysis_window_minutes),
+    }
+
+    return EffectiveSettingsOut(
+        tenant_id=tenant_id,
+        opensearch=opensearch,
+        llm=llm,
+        schedule=schedule,
+    )

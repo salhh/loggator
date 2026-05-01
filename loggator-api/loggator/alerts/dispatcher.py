@@ -2,10 +2,12 @@ import structlog
 import httpx
 from dataclasses import dataclass, field as dc_field
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from loggator.config import settings
 from loggator.db.models import Alert, Anomaly
 from loggator.observability import system_event_writer
+from loggator.tenancy.constants import BOOTSTRAP_TENANT_ID
 
 log = structlog.get_logger()
 
@@ -20,14 +22,14 @@ def _meets_threshold(severity: str) -> bool:
     return _SEVERITY_ORDER.get(severity, 0) >= _THRESHOLD
 
 
-def _is_cooling_down(index_pattern: str, severity: str) -> bool:
-    key = f"{index_pattern}:{severity}"
+def _is_cooling_down(tenant_id: UUID, index_pattern: str, severity: str) -> bool:
+    key = f"{tenant_id}:{index_pattern}:{severity}"
     last = _cooldown_cache.get(key)
     return last is not None and datetime.utcnow() - last < timedelta(minutes=settings.alert_cooldown_minutes)
 
 
-def _record_sent(index_pattern: str, severity: str) -> None:
-    _cooldown_cache[f"{index_pattern}:{severity}"] = datetime.utcnow()
+def _record_sent(tenant_id: UUID, index_pattern: str, severity: str) -> None:
+    _cooldown_cache[f"{tenant_id}:{index_pattern}:{severity}"] = datetime.utcnow()
 
 
 def _build_payload(anomaly) -> dict:
@@ -138,7 +140,7 @@ async def dispatch(anomaly: Anomaly, session) -> list[Alert]:
         log.debug("dispatcher.below_threshold", severity=anomaly.severity, threshold=settings.alert_severity_threshold)
         return []
 
-    if _is_cooling_down(anomaly.index_pattern, anomaly.severity):
+    if _is_cooling_down(anomaly.tenant_id, anomaly.index_pattern, anomaly.severity):
         log.info(
             "dispatcher.cooldown",
             index_pattern=anomaly.index_pattern,
@@ -152,6 +154,7 @@ async def dispatch(anomaly: Anomaly, session) -> list[Alert]:
 
     async def _record(channel: str, destination: str, ok: bool, error: str) -> Alert:
         alert = Alert(
+            tenant_id=anomaly.tenant_id,
             anomaly_id=anomaly.id,
             channel=channel,
             destination=destination,
@@ -218,7 +221,7 @@ async def dispatch(anomaly: Anomaly, session) -> list[Alert]:
     # Registry-based channels
     try:
         from loggator.db.alert_registry import list_enabled_channels_raw
-        reg_channels = await list_enabled_channels_raw(session)
+        reg_channels = await list_enabled_channels_raw(session, anomaly.tenant_id)
     except Exception:
         reg_channels = []
 
@@ -293,7 +296,7 @@ async def dispatch(anomaly: Anomaly, session) -> list[Alert]:
         log.info("dispatcher.registry_channel", type=ch_type, label=ch_label, ok=ok, anomaly_id=str(anomaly.id))
 
     if alerts_created:
-        _record_sent(anomaly.index_pattern, anomaly.severity)
+        _record_sent(anomaly.tenant_id, anomaly.index_pattern, anomaly.severity)
         if any(a.status == "sent" for a in alerts_created):
             anomaly.alerted = True
             await session.commit()
@@ -307,6 +310,7 @@ async def dispatch(anomaly: Anomaly, session) -> list[Alert]:
 class _FakeAnomaly:
     """Minimal stand-in for Anomaly used only in test dispatches."""
     id: str = "00000000-0000-0000-0000-000000000000"
+    tenant_id: UUID = BOOTSTRAP_TENANT_ID
     severity: str = "high"
     summary: str = "This is a test alert from Loggator."
     root_cause_hints: list = dc_field(default_factory=lambda: ["Test hint 1", "Test hint 2"])

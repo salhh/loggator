@@ -1,12 +1,14 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.db.models import SystemEvent
 from loggator.db.session import get_session
+from loggator.tenancy.deps import get_effective_tenant_id
 
 router = APIRouter(tags=["observability"])
 
@@ -34,6 +36,7 @@ async def list_system_events(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
 ) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     effective_from = from_ts or (now - timedelta(hours=24))
@@ -42,6 +45,7 @@ async def list_system_events(
     filters: list = [
         SystemEvent.timestamp >= effective_from,
         SystemEvent.timestamp <= effective_to,
+        or_(SystemEvent.tenant_id.is_(None), SystemEvent.tenant_id == tenant_id),
     ]
     if service:
         filters.append(SystemEvent.service == service)
@@ -88,6 +92,7 @@ async def list_system_events(
                 SystemEvent.severity.in_(["error", "critical"]),
                 SystemEvent.resolved_at.is_(None),
                 SystemEvent.timestamp >= cutoff_15,
+                or_(SystemEvent.tenant_id.is_(None), SystemEvent.tenant_id == tenant_id),
             )
         )
         .order_by(SystemEvent.timestamp.desc())
@@ -118,11 +123,14 @@ async def list_system_events(
 async def get_system_event(
     event_id: str,
     session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
 ) -> dict[str, Any]:
     result = await session.execute(
         select(SystemEvent).where(SystemEvent.id == event_id)
     )
     event = result.scalar_one_or_none()
     if event is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event.tenant_id is not None and event.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Event not found")
     return _event_dict(event)

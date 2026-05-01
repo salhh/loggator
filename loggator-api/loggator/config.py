@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "llama3"
+    ollama_embed_model: str = "nomic-embed-text"
     ollama_concurrency: int = 3
     ollama_timeout: int = 120
 
@@ -78,6 +79,13 @@ class Settings(BaseSettings):
     sentry_dsn: str = ""
     sentry_traces_sample_rate: float = 0.2
     sentry_environment: str = "production"
+
+    # Auth (OIDC/JWT)
+    auth_disabled: bool = True  # dev default; set false in real deployments
+    oidc_issuer: str = ""
+    oidc_audience: str = ""
+    oidc_jwks_url: str = ""
+    dev_jwt_secret: SecretStr = SecretStr("")  # optional HS256 dev-only secret
 
 
 settings = Settings()

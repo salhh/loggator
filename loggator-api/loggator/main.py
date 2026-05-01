@@ -25,7 +25,7 @@ if settings.sentry_dsn:
         integrations=[StarletteIntegration(), FastApiIntegration()],
     )
 
-from loggator.api.routes import summaries, anomalies, alerts, status, chat, logs
+from loggator.api.routes import summaries, anomalies, alerts, status, chat, logs, runtime, ingest
 from loggator.api.routes import settings as settings_routes
 from loggator.api.routes import schedule as schedule_routes
 from loggator.api.routes import analysis_reports as analysis_reports_routes
@@ -35,6 +35,7 @@ from loggator.api.routes import system_events as system_events_routes
 from loggator.api.routes import audit_log as audit_log_routes
 from loggator.api.routes import llms as llms_routes
 from loggator.api.routes import alert_channels as alert_channels_routes
+from loggator.api.routes import tenants as tenants_routes
 from loggator.api import websocket
 from loggator.observability.middleware import AuditLogMiddleware
 
@@ -87,11 +88,13 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(AuditLogMiddleware)
 
 app.include_router(status.router, prefix="/api/v1")
+app.include_router(runtime.router, prefix="/api/v1")
 app.include_router(summaries.router, prefix="/api/v1")
 app.include_router(anomalies.router, prefix="/api/v1")
 app.include_router(alerts.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(logs.router, prefix="/api/v1")
+app.include_router(ingest.router, prefix="/api/v1")
 app.include_router(settings_routes.router, prefix="/api/v1")
 app.include_router(schedule_routes.router, prefix="/api/v1")
 app.include_router(analysis_reports_routes.router, prefix="/api/v1")
@@ -101,4 +104,5 @@ app.include_router(system_events_routes.router, prefix="/api/v1")
 app.include_router(audit_log_routes.router, prefix="/api/v1")
 app.include_router(llms_routes.router, prefix="/api/v1")
 app.include_router(alert_channels_routes.router, prefix="/api/v1")
+app.include_router(tenants_routes.router, prefix="/api/v1")
 app.include_router(websocket.router)

@@ -3,8 +3,8 @@ import httpx
 import structlog
 from datetime import datetime, timezone
 from typing import Any
+from uuid import UUID
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from loggator.config import settings
@@ -12,13 +12,14 @@ from loggator.db.models import LogEmbedding
 
 log = structlog.get_logger()
 
-_EMBED_URL = f"{settings.ollama_base_url}/api/embeddings"
-_EMBED_MODEL = "nomic-embed-text"
-
 
 async def _embed(text_: str) -> list[float]:
+    url = f"{settings.ollama_base_url}/api/embeddings"
     async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(_EMBED_URL, json={"model": _EMBED_MODEL, "prompt": text_})
+        resp = await client.post(
+            url,
+            json={"model": settings.ollama_embed_model, "prompt": text_},
+        )
         resp.raise_for_status()
         return resp.json()["embedding"]
 
@@ -34,11 +35,18 @@ def _render(doc: dict) -> str:
     return f"[{ts}] [{level}] [{service}] [{host}] {message}{suffix}"
 
 
+def format_doc_for_context(doc: dict) -> str:
+    """Single-line log representation for RAG / chat context (same format as stored embeddings)."""
+    return _render(doc)
+
+
 def _doc_id(rendered: str) -> str:
     return hashlib.sha256(rendered.encode()).hexdigest()
 
 
-async def index_docs(docs: list[dict], index_pattern: str, session: AsyncSession) -> int:
+async def index_docs(
+    docs: list[dict], index_pattern: str, session: AsyncSession, tenant_id: UUID,
+) -> int:
     """Embed docs and upsert into log_embeddings. Returns count inserted."""
     inserted = 0
     for doc in docs:
@@ -60,6 +68,7 @@ async def index_docs(docs: list[dict], index_pattern: str, session: AsyncSession
         meta = {k: doc[k] for k in ("level", "service", "host") if k in doc}
 
         row = LogEmbedding(
+            tenant_id=tenant_id,
             log_timestamp=log_timestamp,
             index_pattern=index_pattern,
             text=rendered,
