@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timezone
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,6 +26,7 @@ router = APIRouter(prefix="/tenant-api-keys", tags=["tenant-api-keys"])
 class TenantApiKeyCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     scopes: list[str] = Field(default_factory=lambda: ["ingest"])
+    expires_at: Optional[datetime] = Field(default=None, description="Optional expiry timestamp (UTC)")
 
 
 class TenantApiKeyCreated(BaseModel):
@@ -34,6 +36,7 @@ class TenantApiKeyCreated(BaseModel):
     key: str
     scopes: list[str]
     created_at: datetime
+    expires_at: Optional[datetime]
 
 
 class TenantApiKeyListItem(BaseModel):
@@ -42,11 +45,22 @@ class TenantApiKeyListItem(BaseModel):
     key_prefix: str
     scopes: list
     created_at: datetime
-    last_used_at: datetime | None
-    revoked_at: datetime | None
+    last_used_at: Optional[datetime]
+    expires_at: Optional[datetime]
+    revoked_at: Optional[datetime]
 
     class Config:
         from_attributes = True
+
+
+class RotateOut(BaseModel):
+    id: UUID
+    name: str
+    key_prefix: str
+    key: str
+    scopes: list[str]
+    created_at: datetime
+    expires_at: Optional[datetime]
 
 
 @router.post("", response_model=TenantApiKeyCreated)
@@ -64,6 +78,7 @@ async def create_tenant_api_key(
         key_prefix=raw[:16],
         key_hash=hash_ingest_api_key(raw),
         scopes=list(body.scopes) if body.scopes else ["ingest"],
+        expires_at=body.expires_at,
     )
     session.add(row)
     await session.commit()
@@ -75,6 +90,7 @@ async def create_tenant_api_key(
         key=raw,
         scopes=row.scopes if isinstance(row.scopes, list) else [],
         created_at=row.created_at,
+        expires_at=row.expires_at,
     )
 
 
@@ -110,3 +126,46 @@ async def revoke_tenant_api_key(
     row.revoked_at = datetime.now(timezone.utc)
     await session.commit()
     return {"ok": True}
+
+
+@router.post("/{key_id}/rotate", response_model=RotateOut)
+async def rotate_tenant_api_key(
+    key_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    tenant_id: UUID = Depends(get_effective_tenant_id),
+    user: UserClaims | None = Depends(require_auth),
+):
+    """Revoke the current key and issue a new one with the same name/scopes/expiry."""
+    await assert_tenant_admin_or_platform(session, user, tenant_id)
+    r = await session.execute(
+        select(TenantApiKey).where(TenantApiKey.id == key_id, TenantApiKey.tenant_id == tenant_id).limit(1)
+    )
+    old = r.scalar_one_or_none()
+    if old is None:
+        raise HTTPException(status_code=404, detail="API key not found")
+    if old.revoked_at is not None:
+        raise HTTPException(status_code=400, detail="API key is already revoked")
+
+    old.revoked_at = datetime.now(timezone.utc)
+
+    raw = "lgk_" + secrets.token_urlsafe(24)
+    new_row = TenantApiKey(
+        tenant_id=tenant_id,
+        name=old.name,
+        key_prefix=raw[:16],
+        key_hash=hash_ingest_api_key(raw),
+        scopes=old.scopes if isinstance(old.scopes, list) else ["ingest"],
+        expires_at=old.expires_at,
+    )
+    session.add(new_row)
+    await session.commit()
+    await session.refresh(new_row)
+    return RotateOut(
+        id=new_row.id,
+        name=new_row.name,
+        key_prefix=new_row.key_prefix,
+        key=raw,
+        scopes=new_row.scopes if isinstance(new_row.scopes, list) else [],
+        created_at=new_row.created_at,
+        expires_at=new_row.expires_at,
+    )

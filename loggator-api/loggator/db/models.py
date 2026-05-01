@@ -77,6 +77,7 @@ class TenantApiKey(Base):
     scopes = Column(JSONB, nullable=False, default=list)  # e.g. ["ingest"]
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_used_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
     revoked_at = Column(DateTime(timezone=True), nullable=True)
 
 
@@ -110,8 +111,13 @@ class Anomaly(Base):
     root_cause_hints = Column(JSONB, nullable=False, default=list)
     mitre_tactics = Column(JSONB, nullable=False, default=list, server_default="[]")
     raw_logs = Column(JSONB, nullable=True)
+    enrichment_context = Column(JSONB, nullable=True)  # threat intel results
     model_used = Column(String(100), nullable=False)
     alerted = Column(Boolean, nullable=False, default=False)
+    source = Column(String(20), nullable=False, default="llm")  # llm | rule | ueba
+    triage_status = Column(String(20), nullable=False, default="new")  # new | acknowledged | suppressed | false_positive
+    triage_note = Column(Text, nullable=True)
+    triaged_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class Alert(Base):
@@ -214,3 +220,99 @@ class AuditLog(Base):
     error_detail = Column(Text, nullable=True)
     actor_id = Column(Text, nullable=True)
     actor_type = Column(Text, nullable=True)
+
+
+class BillingPlan(Base):
+    __tablename__ = "billing_plans"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(Text, nullable=False)
+    slug = Column(String(64), nullable=False, unique=True)
+    max_members = Column(Integer, nullable=True)
+    max_api_calls_per_day = Column(Integer, nullable=True)
+    max_log_volume_mb_per_day = Column(Integer, nullable=True)
+    price_usd_cents = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class TenantBilling(Base):
+    __tablename__ = "tenant_billing"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, unique=True)
+    plan_id = Column(UUID(as_uuid=True), ForeignKey("billing_plans.id", ondelete="SET NULL"), nullable=True)
+    api_calls_today = Column(Integer, nullable=False, default=0)
+    log_volume_mb_today = Column(Integer, nullable=False, default=0)
+    billing_cycle_start = Column(DateTime(timezone=True), nullable=True)
+    notes = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Incident(Base):
+    """Security incident created from one or more anomalies."""
+
+    __tablename__ = "incidents"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(Text, nullable=False)
+    status = Column(String(20), nullable=False, default="open")  # open | investigating | resolved | false_positive
+    severity = Column(String(10), nullable=False, default="medium")  # low | medium | high | critical
+    assignee_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    linked_anomaly_ids = Column(JSONB, nullable=False, default=list)
+    notes = Column(Text, nullable=True)
+    mitre_tactics = Column(JSONB, nullable=False, default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class IncidentComment(Base):
+    """Threaded comment on an incident for analyst collaboration."""
+
+    __tablename__ = "incident_comments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    incident_id = Column(UUID(as_uuid=True), ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True)
+    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    author_label = Column(Text, nullable=True)  # cached display name / email at write time
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class DetectionRule(Base):
+    """Deterministic detection rule evaluated against every log batch."""
+
+    __tablename__ = "detection_rules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    # condition stored as JSON DSL: {"type": "field_match"|"threshold"|"regex", ...}
+    condition = Column(JSONB, nullable=False)
+    severity = Column(String(10), nullable=False, default="medium")
+    mitre_tactics = Column(JSONB, nullable=False, default=list)
+    enabled = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ThreatIndicator(Base):
+    """Cached threat intelligence lookup results (IP reputation, domain, hash)."""
+
+    __tablename__ = "threat_indicators"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ioc_type = Column(String(20), nullable=False)   # ip | domain | hash
+    value = Column(Text, nullable=False, index=True)
+    reputation = Column(String(20), nullable=False, default="unknown")  # clean | suspicious | malicious | unknown
+    confidence_score = Column(Integer, nullable=True)   # 0-100
+    source = Column(Text, nullable=True)               # abuseipdb | greynoise | otx
+    details = Column(JSONB, nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (UniqueConstraint("ioc_type", "value", name="uq_threat_indicator_type_value"),)

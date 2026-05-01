@@ -16,6 +16,9 @@ from loggator.processing.chunker import chunk_docs
 from loggator.processing.mapreduce import analyze_chunks_for_anomalies
 from loggator.alerts.dispatcher import dispatch
 from loggator.observability import system_event_writer
+from loggator.pipelines.rule_engine import evaluate_rules
+from loggator.enrichment.ioc_extractor import extract_iocs
+from loggator.enrichment.lookup import enrich_anomaly_iocs
 
 log = structlog.get_logger()
 
@@ -60,6 +63,17 @@ async def _process_batch(
             model_used={"anthropic": settings.anthropic_model, "openai": settings.openai_model}.get(settings.llm_provider, settings.ollama_model),
         )
         anomaly = await repo.save(anomaly)
+
+        # Enrich IOCs from raw logs
+        try:
+            iocs = extract_iocs([{"message": doc.get("text", "")} for doc in (anomaly.raw_logs or [])])
+            if any(iocs.values()):
+                enrichment = await enrich_anomaly_iocs(session, iocs)
+                anomaly.enrichment_context = enrichment
+                await session.commit()
+        except Exception:
+            pass
+
         saved.append(anomaly)
 
         try:
@@ -124,6 +138,30 @@ async def _tenant_stream_loop(tenant_id: UUID, global_index_pattern: str | None)
                 log.info("streaming.fetched", count=len(docs), index_pattern=index_pattern, tenant_id=str(tenant_id))
                 async with AsyncSessionLocal() as session:
                     await _process_batch(docs, index_pattern, session, tenant_id)
+                    # Run deterministic rule engine against the same batch
+                    rule_anomalies = await evaluate_rules(
+                        session, tenant_id, docs, "rule-engine", index_pattern
+                    )
+                    repo = AnomalyRepository(session, tenant_id)
+                    for anomaly in rule_anomalies:
+                        anomaly = await repo.save(anomaly)
+                        try:
+                            from loggator.api.websocket import broadcast_tenant_event
+                            await broadcast_tenant_event(
+                                tenant_id,
+                                {
+                                    "type": "anomaly",
+                                    "anomaly_id": str(anomaly.id),
+                                    "severity": anomaly.severity,
+                                    "summary": anomaly.summary,
+                                    "detected_at": anomaly.detected_at.isoformat(),
+                                    "index_pattern": anomaly.index_pattern,
+                                    "source": "rule",
+                                },
+                            )
+                        except Exception:
+                            pass
+                        await dispatch(anomaly, session)
 
                 sort_cursor = new_cursor
                 if new_cursor:

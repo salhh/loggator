@@ -12,6 +12,21 @@ export interface Summary {
   tokens_used: number | null;
 }
 
+export interface EnrichmentResult {
+  ioc_type: string;
+  value: string;
+  reputation: "clean" | "suspicious" | "malicious" | "unknown";
+  confidence_score: number | null;
+  source: string;
+  details: Record<string, unknown>;
+}
+
+export interface AnomalyEnrichment {
+  ips: EnrichmentResult[];
+  hashes: string[];
+  domains: string[];
+}
+
 export interface Anomaly {
   id: string;
   detected_at: string;
@@ -20,9 +35,52 @@ export interface Anomaly {
   severity: "low" | "medium" | "high";
   summary: string;
   root_cause_hints: string[];
+  mitre_tactics: string[];
   raw_logs: string[] | null;
+  enrichment_context: AnomalyEnrichment | null;
   model_used: string;
   alerted: boolean;
+  source: "llm" | "rule" | "ueba";
+  triage_status: "new" | "acknowledged" | "suppressed" | "false_positive";
+  triage_note: string | null;
+  triaged_at: string | null;
+}
+
+export interface Incident {
+  id: string;
+  tenant_id: string;
+  title: string;
+  status: "open" | "investigating" | "resolved" | "false_positive";
+  severity: "low" | "medium" | "high" | "critical";
+  assignee_id: string | null;
+  linked_anomaly_ids: string[];
+  notes: string | null;
+  mitre_tactics: string[];
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+}
+
+export interface IncidentComment {
+  id: string;
+  incident_id: string;
+  author_id: string | null;
+  author_label: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface DetectionRule {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description: string | null;
+  condition: Record<string, unknown>;
+  severity: "low" | "medium" | "high" | "critical";
+  mitre_tactics: string[];
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Alert {
@@ -175,6 +233,7 @@ export interface SystemEventsResponse {
 
 export interface AuditLogEntry {
   id: string;
+  tenant_id: string | null;
   timestamp: string;
   request_id: string;
   method: string;
@@ -186,4 +245,53 @@ export interface AuditLogEntry {
   error_detail: string | null;
   actor_id: string | null;
   actor_type: string | null;
+}
+
+// ── Billing ──────────────────────────────────────────────────────────────────
+
+export interface BillingPlan {
+  id: string;
+  name: string;
+  slug: string;
+  max_members: number | null;
+  max_api_calls_per_day: number | null;
+  max_log_volume_mb_per_day: number | null;
+  price_usd_cents: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface TenantBilling {
+  id: string;
+  tenant_id: string;
+  plan_id: string | null;
+  plan: BillingPlan | null;
+  api_calls_today: number;
+  log_volume_mb_today: number;
+  billing_cycle_start: string | null;
+  notes: string | null;
+  limits_exceeded: boolean;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface TenantStats {
+  member_count: number;
+  anomaly_count: number;
+  summary_count: number;
+  api_key_count: number;
+}
+
+export interface TenantConnection {
+  opensearch_host: string | null;
+  opensearch_port: number | null;
+  opensearch_auth_type: string | null;
+  opensearch_username: string | null;
+  opensearch_password: string | null;
+  opensearch_api_key: string | null;
+  opensearch_use_ssl: boolean | null;
+  opensearch_verify_certs: boolean | null;
+  opensearch_ca_certs: string | null;
+  aws_region: string | null;
+  opensearch_index_pattern: string | null;
 }

@@ -1,4 +1,4 @@
-import type { Summary, Anomaly, Alert, StatusResponse, AnalysisReport, ScheduledAnalysis, ScheduleStatus, HealthResponse, StatsResponse, SystemEventsResponse, SystemEvent, AuditLogEntry } from "./types";
+import type { Summary, Anomaly, Alert, StatusResponse, AnalysisReport, ScheduledAnalysis, ScheduleStatus, HealthResponse, StatsResponse, SystemEventsResponse, SystemEvent, AuditLogEntry, BillingPlan, TenantBilling, TenantStats, TenantConnection, Incident, IncidentComment, DetectionRule } from "./types";
 import { authHeaders } from "./auth-headers";
 
 // API_URL is only available server-side (no NEXT_PUBLIC_ prefix).
@@ -8,7 +8,7 @@ const BASE =
   process.env.NEXT_PUBLIC_API_URL ??
   "http://localhost:8000/api/v1";
 
-export type TenantRow = { id: string; name: string; slug: string; status: string; created_at: string };
+export type TenantRow = { id: string; name: string; slug: string; status: string; created_at: string; member_count: number };
 
 export type AuthMeResponse = {
   user_id: string;
@@ -19,19 +19,23 @@ export type AuthMeResponse = {
   tenant_ids?: string[];
 };
 
-async function get<T>(path: string): Promise<T> {
+function extraHeaders(xTenantId?: string): Record<string, string> {
+  return xTenantId ? { "X-Tenant-Id": xTenantId } : {};
+}
+
+async function get<T>(path: string, xTenantId?: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     cache: "no-store",
-    headers: { ...authHeaders() },
+    headers: { ...authHeaders(), ...extraHeaders(xTenantId) },
   });
   if (!res.ok) throw new Error(`API error ${res.status}: ${path}`);
   return res.json();
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+async function post<T>(path: string, body: unknown, xTenantId?: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
+    headers: { "Content-Type": "application/json", ...authHeaders(), ...extraHeaders(xTenantId) },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -49,10 +53,10 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
-async function put<T>(path: string, body: unknown): Promise<T> {
+async function put<T>(path: string, body: unknown, xTenantId?: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
+    headers: { "Content-Type": "application/json", ...authHeaders(), ...extraHeaders(xTenantId) },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -68,10 +72,10 @@ async function put<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
-async function patch<T>(path: string, body: unknown): Promise<T> {
+async function patch<T>(path: string, body: unknown, xTenantId?: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
+    headers: { "Content-Type": "application/json", ...authHeaders(), ...extraHeaders(xTenantId) },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -87,8 +91,8 @@ async function patch<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
-async function del<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { method: "DELETE", headers: { ...authHeaders() } });
+async function del<T>(path: string, xTenantId?: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { method: "DELETE", headers: { ...authHeaders(), ...extraHeaders(xTenantId) } });
   if (!res.ok) {
     let detail = "";
     try {
@@ -109,9 +113,17 @@ export const api = {
   summaries: (limit = 20, offset = 0) =>
     get<Summary[]>(`/summaries?limit=${limit}&offset=${offset}`),
   summary: (id: string) => get<Summary>(`/summaries/${id}`),
-  anomalies: (limit = 50, severity?: string) =>
-    get<Anomaly[]>(`/anomalies?limit=${limit}${severity ? `&severity=${severity}` : ""}`),
+  anomalies: (limit = 50, severity?: string, tactic?: string, triage_status?: string) => {
+    const qs = new URLSearchParams();
+    qs.set("limit", String(limit));
+    if (severity) qs.set("severity", severity);
+    if (tactic) qs.set("tactic", tactic);
+    if (triage_status) qs.set("triage_status", triage_status);
+    return get<Anomaly[]>(`/anomalies?${qs.toString()}`);
+  },
   anomaly: (id: string) => get<Anomaly>(`/anomalies/${id}`),
+  triageAnomaly: (id: string, status: string, note?: string) =>
+    patch<Anomaly>(`/anomalies/${id}/triage`, { status, note }),
   alerts: (limit = 50, channel?: string) =>
     get<Alert[]>(`/alerts?limit=${limit}${channel ? `&channel=${channel}` : ""}`),
   testAlert: (channel: "slack" | "email" | "telegram" | "webhook") =>
@@ -183,7 +195,7 @@ export const api = {
     const q = qs.toString();
     return get<AuditLogEntry[]>(`/audit-log${q ? `?${q}` : ""}`);
   },
-  createTenantApiKey: (name: string) =>
+  createTenantApiKey: (name: string, expires_at?: string) =>
     post<{
       id: string;
       name: string;
@@ -191,7 +203,8 @@ export const api = {
       key: string;
       scopes: string[];
       created_at: string;
-    }>("/tenant-api-keys", { name, scopes: ["ingest"] }),
+      expires_at: string | null;
+    }>("/tenant-api-keys", { name, scopes: ["ingest"], expires_at: expires_at ?? null }),
   listTenantApiKeys: () =>
     get<
       Array<{
@@ -201,10 +214,47 @@ export const api = {
         scopes: string[];
         created_at: string;
         last_used_at: string | null;
+        expires_at: string | null;
         revoked_at: string | null;
       }>
     >("/tenant-api-keys"),
   revokeTenantApiKey: (id: string) => post<{ ok: boolean }>(`/tenant-api-keys/${id}/revoke`, {}),
+  rotateTenantApiKey: (id: string) =>
+    post<{ id: string; name: string; key_prefix: string; key: string; scopes: string[]; created_at: string; expires_at: string | null }>(
+      `/tenant-api-keys/${id}/rotate`,
+      {}
+    ),
+
+  // Incidents
+  incidents: (status?: string, severity?: string, limit = 50) => {
+    const qs = new URLSearchParams();
+    qs.set("limit", String(limit));
+    if (status) qs.set("status", status);
+    if (severity) qs.set("severity", severity);
+    return get<Incident[]>(`/incidents?${qs.toString()}`);
+  },
+  incident: (id: string) => get<Incident>(`/incidents/${id}`),
+  createIncident: (body: { title: string; severity?: string; notes?: string; linked_anomaly_ids?: string[]; mitre_tactics?: string[] }) =>
+    post<Incident>("/incidents", body),
+  patchIncident: (id: string, body: Partial<{ title: string; status: string; severity: string; notes: string; assignee_subject: string; linked_anomaly_ids: string[]; mitre_tactics: string[] }>) =>
+    patch<Incident>(`/incidents/${id}`, body),
+  deleteIncident: (id: string) => del<void>(`/incidents/${id}`),
+  incidentComments: (id: string) => get<IncidentComment[]>(`/incidents/${id}/comments`),
+  addIncidentComment: (id: string, body: string) =>
+    post<IncidentComment>(`/incidents/${id}/comments`, { body }),
+
+  // Detection rules
+  detectionRules: (enabled?: boolean) => {
+    const qs = new URLSearchParams();
+    if (enabled !== undefined) qs.set("enabled", String(enabled));
+    return get<DetectionRule[]>(`/detection-rules?${qs.toString()}`);
+  },
+  detectionRule: (id: string) => get<DetectionRule>(`/detection-rules/${id}`),
+  createDetectionRule: (body: { name: string; description?: string; condition: Record<string, unknown>; severity?: string; mitre_tactics?: string[]; enabled?: boolean }) =>
+    post<DetectionRule>("/detection-rules", body),
+  patchDetectionRule: (id: string, body: Partial<{ name: string; description: string; condition: Record<string, unknown>; severity: string; mitre_tactics: string[]; enabled: boolean }>) =>
+    patch<DetectionRule>(`/detection-rules/${id}`, body),
+  deleteDetectionRule: (id: string) => del<void>(`/detection-rules/${id}`),
 
   platformTenants: () => get<TenantRow[]>("/platform/tenants"),
   platformTenant: (id: string) => get<TenantRow>(`/platform/tenants/${id}`),
@@ -221,7 +271,7 @@ export const api = {
       `/platform/users${search ? `?search=${encodeURIComponent(search)}` : ""}`
     ),
 
-  tenantMembers: () =>
+  tenantMembers: (xTenantId?: string) =>
     get<
       Array<{
         membership_id: string;
@@ -231,8 +281,8 @@ export const api = {
         role: string;
         created_at: string;
       }>
-    >("/tenant/members"),
-  addTenantMember: (body: { subject: string; email?: string; role?: string }) =>
+    >("/tenant/members", xTenantId),
+  addTenantMember: (body: { subject: string; email?: string; role?: string }, xTenantId?: string) =>
     post<{
       membership_id: string;
       user_id: string;
@@ -240,8 +290,8 @@ export const api = {
       email: string;
       role: string;
       created_at: string;
-    }>("/tenant/members", body),
-  patchTenantMember: (membershipId: string, body: { role: string }) =>
+    }>("/tenant/members", body, xTenantId),
+  patchTenantMember: (membershipId: string, body: { role: string }, xTenantId?: string) =>
     patch<{
       membership_id: string;
       user_id: string;
@@ -249,6 +299,68 @@ export const api = {
       email: string;
       role: string;
       created_at: string;
-    }>(`/tenant/members/${membershipId}`, body),
-  removeTenantMember: (membershipId: string) => del<{ ok: boolean }>(`/tenant/members/${membershipId}`),
+    }>(`/tenant/members/${membershipId}`, body, xTenantId),
+  removeTenantMember: (membershipId: string, xTenantId?: string) =>
+    del<{ ok: boolean }>(`/tenant/members/${membershipId}`, xTenantId),
+
+  // Billing plans
+  platformBillingPlans: () => get<BillingPlan[]>("/platform/billing/plans"),
+  platformCreateBillingPlan: (body: {
+    name: string;
+    slug: string;
+    max_members?: number | null;
+    max_api_calls_per_day?: number | null;
+    max_log_volume_mb_per_day?: number | null;
+    price_usd_cents?: number;
+  }) => post<BillingPlan>("/platform/billing/plans", body),
+  platformPatchBillingPlan: (id: string, body: Partial<{
+    name: string;
+    max_members: number | null;
+    max_api_calls_per_day: number | null;
+    max_log_volume_mb_per_day: number | null;
+    price_usd_cents: number;
+    is_active: boolean;
+  }>) => patch<BillingPlan>(`/platform/billing/plans/${id}`, body),
+
+  // Tenant billing
+  platformTenantBilling: (tenantId: string) =>
+    get<TenantBilling>(`/platform/billing/tenants/${tenantId}`),
+  platformPutTenantBilling: (tenantId: string, body: { plan_id: string | null; notes?: string | null }) =>
+    put<TenantBilling>(`/platform/billing/tenants/${tenantId}`, body),
+  platformResetBillingCounters: (tenantId: string) =>
+    post<{ ok: boolean }>(`/platform/billing/tenants/${tenantId}/reset-counters`, {}),
+
+  // Tenant stats and connection
+  platformTenantStats: (tenantId: string) =>
+    get<TenantStats>(`/platform/tenants/${tenantId}/stats`),
+  platformTenantConnection: (tenantId: string) =>
+    get<TenantConnection | null>(`/platform/tenants/${tenantId}/connection`),
+  platformPutTenantConnection: (tenantId: string, body: Partial<TenantConnection>) =>
+    put<{ ok: boolean }>(`/platform/tenants/${tenantId}/connection`, body),
+
+  // Platform-wide audit log
+  platformAuditLog: (params?: {
+    tenant_id?: string;
+    path?: string;
+    method?: string;
+    status?: string;
+    actor_id?: string;
+    from_ts?: string;
+    to_ts?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.tenant_id) qs.set("tenant_id", params.tenant_id);
+    if (params?.path) qs.set("path", params.path);
+    if (params?.method) qs.set("method", params.method);
+    if (params?.status) qs.set("status", params.status);
+    if (params?.actor_id) qs.set("actor_id", params.actor_id);
+    if (params?.from_ts) qs.set("from_ts", params.from_ts);
+    if (params?.to_ts) qs.set("to_ts", params.to_ts);
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+    if (params?.offset !== undefined) qs.set("offset", String(params.offset));
+    const q = qs.toString();
+    return get<AuditLogEntry[]>(`/platform/audit-log${q ? `?${q}` : ""}`);
+  },
 };

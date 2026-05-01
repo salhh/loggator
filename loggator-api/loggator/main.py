@@ -40,7 +40,11 @@ from loggator.api.routes import platform_tenants as platform_tenants_routes
 from loggator.api.routes import tenant_api_keys as tenant_api_keys_routes
 from loggator.api.routes import tenant_members as tenant_members_routes
 from loggator.api.routes import platform_users as platform_users_routes
+from loggator.api.routes import platform_billing as platform_billing_routes
+from loggator.api.routes import platform_audit_log as platform_audit_log_routes
 from loggator.api.routes import auth_info as auth_info_routes
+from loggator.api.routes import incidents as incidents_routes
+from loggator.api.routes import detection_rules as detection_rules_routes
 from loggator.api import websocket
 from loggator.observability.middleware import AuditLogMiddleware
 
@@ -117,4 +121,8 @@ app.include_router(platform_tenants_routes.router, prefix="/api/v1")
 app.include_router(tenant_api_keys_routes.router, prefix="/api/v1")
 app.include_router(tenant_members_routes.router, prefix="/api/v1")
 app.include_router(platform_users_routes.router, prefix="/api/v1")
+app.include_router(platform_billing_routes.router, prefix="/api/v1")
+app.include_router(platform_audit_log_routes.router, prefix="/api/v1")
+app.include_router(incidents_routes.router, prefix="/api/v1")
+app.include_router(detection_rules_routes.router, prefix="/api/v1")
 app.include_router(websocket.router)

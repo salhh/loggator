@@ -4,16 +4,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const nav = [
-  { href: "/", label: "Dashboard" },
-  { href: "/platform/tenants", label: "Platform" },
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/platform", label: "Platform Admin", separator: false },
+  // ── Detection ──
+  { href: "/anomalies", label: "Anomalies" },
+  { href: "/incidents", label: "Incidents" },
+  { href: "/rules", label: "Detection Rules" },
+  { href: "/alerts", label: "Alerts" },
+  // ── Analysis ──
   { href: "/logs", label: "Logs" },
   { href: "/summaries", label: "Summaries" },
-  { href: "/anomalies", label: "Anomalies" },
-  { href: "/alerts", label: "Alerts" },
   { href: "/reports", label: "Reports" },
   { href: "/stats", label: "Statistics" },
-  { href: "/health", label: "Health" },
   { href: "/chat", label: "Chat" },
+  // ── Platform ──
+  { href: "/health", label: "Health" },
   { href: "/settings", label: "Settings" },
 ];
 
@@ -22,7 +27,8 @@ export default function SidebarNav() {
   return (
     <nav className="flex flex-col gap-0.5">
       {nav.map(({ href, label }) => {
-        const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+        const active =
+          href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
         return (
           <Link
             key={href}
