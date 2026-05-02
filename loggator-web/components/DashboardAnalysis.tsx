@@ -38,7 +38,6 @@ export default function DashboardAnalysis() {
   // Auto-run on mount with default 24h window
   useEffect(() => {
     runAnalysis(24);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handlePreset(hours: number) {

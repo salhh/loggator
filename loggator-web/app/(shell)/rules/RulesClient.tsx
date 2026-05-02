@@ -73,16 +73,6 @@ export default function RulesClient({ rules }: RulesClientProps) {
     }
   }
 
-  async function deleteRule(rule: DetectionRule) {
-    if (!confirm(`Delete rule "${rule.name}"?`)) return;
-    try {
-      await api.deleteDetectionRule(rule.id);
-      router.refresh();
-    } catch {
-      // ignore
-    }
-  }
-
   return (
     <>
       {/* Per-rule toggle/delete buttons — rendered inline via data attributes for simplicity */}

@@ -4,7 +4,7 @@ import { useAuth } from "@/components/AuthProvider";
 
 /** Compact tenant switcher for the app header. */
 export function HeaderTenantSelect() {
-  const { tenantId, setTenantId, tenants, tenantsError, authStatus } = useAuth();
+  const { tenantId, setTenantId, tenants, authStatus } = useAuth();
   const hasSession = authStatus === "authenticated";
 
   if (!hasSession || tenants.length === 0) return null;

@@ -94,7 +94,7 @@ export default function LogViewer() {
         setLogs(data.logs ?? []);
         setTotal(data.total ?? 0);
         setOffset(currentOffset);
-      } catch (e) {
+      } catch {
         setError("Failed to reach API");
       } finally {
         setLoading(false);

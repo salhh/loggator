@@ -93,7 +93,17 @@ async def test_sensitive_query_params_redacted(app):
     written_rows = []
 
     async def fake_write(
-        request_id, method, path, status_code, duration_ms, client_ip, query_params, error_detail, tenant_id=None,
+        request_id,
+        method,
+        path,
+        status_code,
+        duration_ms,
+        client_ip,
+        query_params,
+        error_detail,
+        tenant_id=None,
+        actor_id=None,
+        actor_type=None,
     ):
         written_rows.append(query_params)
 

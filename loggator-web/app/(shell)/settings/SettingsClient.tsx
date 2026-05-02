@@ -281,8 +281,8 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   );
 }
 
-function TestBtn({ channel, loading, result, onTest }: {
-  channel: string; loading: boolean; result: string; onTest: () => void;
+function TestBtn({ loading, result, onTest }: {
+  loading: boolean; result: string; onTest: () => void;
 }) {
   return (
     <div className="flex items-center gap-2 pt-1">
@@ -478,7 +478,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                 </div>
               </div>
             </Field>
-            <TestBtn channel="slack" loading={!!testLoading["slack"]} result={testResults["slack"] ?? ""} onTest={() => testChannel("slack")} />
+            <TestBtn loading={!!testLoading["slack"]} result={testResults["slack"] ?? ""} onTest={() => testChannel("slack")} />
           </Card>
 
           {/* Telegram */}
@@ -495,7 +495,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                 className={`font-mono text-sm bg-card border-border ${isDirty("TELEGRAM_CHAT_ID") ? "border-primary" : ""}`}
               />
             </Field>
-            <TestBtn channel="telegram" loading={!!testLoading["telegram"]} result={testResults["telegram"] ?? ""} onTest={() => testChannel("telegram")} />
+            <TestBtn loading={!!testLoading["telegram"]} result={testResults["telegram"] ?? ""} onTest={() => testChannel("telegram")} />
           </Card>
 
           {/* Email */}
@@ -536,7 +536,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                 className={`font-mono text-sm bg-card border-border ${isDirty("ALERT_EMAIL_TO") ? "border-primary" : ""}`}
               />
             </Field>
-            <TestBtn channel="email" loading={!!testLoading["email"]} result={testResults["email"] ?? ""} onTest={() => testChannel("email")} />
+            <TestBtn loading={!!testLoading["email"]} result={testResults["email"] ?? ""} onTest={() => testChannel("email")} />
           </Card>
 
           {/* Webhook */}
@@ -554,7 +554,7 @@ export default function SettingsClient({ initial, envFile }: Props) {
                 </div>
               </div>
             </Field>
-            <TestBtn channel="webhook" loading={!!testLoading["webhook"]} result={testResults["webhook"] ?? ""} onTest={() => testChannel("webhook")} />
+            <TestBtn loading={!!testLoading["webhook"]} result={testResults["webhook"] ?? ""} onTest={() => testChannel("webhook")} />
           </Card>
         </div>
       )}
