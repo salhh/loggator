@@ -4,12 +4,13 @@ Idempotent demo data for local Docker / MSP + support testing.
 
 Creates (if missing):
   - Customer tenant `demo-msp-customer` under the existing operator tenant (from migration backfill)
-  - User `msp@local` with msp_admin on the operator tenant (password login)
-  - User `customer@local` with tenant_member on the demo customer tenant
-  - One support thread + customer message on the demo tenant
+  - User `msp@local` with msp_admin on the operator tenant (password login, display_name set)
+  - User `customer@local` with tenant_member on the demo customer tenant (display_name set)
+  - One support thread + customer message on the demo tenant (matches SupportThread / SupportMessage schema)
 
 Env (optional):
-  SEED_MSP_EMAIL, SEED_MSP_PASSWORD, SEED_CUSTOMER_EMAIL, SEED_CUSTOMER_PASSWORD
+  SEED_MSP_EMAIL, SEED_MSP_PASSWORD, SEED_MSP_DISPLAY_NAME,
+  SEED_CUSTOMER_EMAIL, SEED_CUSTOMER_PASSWORD, SEED_CUSTOMER_DISPLAY_NAME
 """
 from __future__ import annotations
 
@@ -28,17 +29,28 @@ from loggator.db.models import Membership, SupportMessage, SupportThread, Tenant
 from loggator.db.session import AsyncSessionLocal
 
 
-async def _ensure_user(session: AsyncSession, subject: str, email: str, password: str) -> User:
+async def _ensure_user(
+    session: AsyncSession,
+    subject: str,
+    email: str,
+    password: str,
+    *,
+    display_name: str,
+) -> User:
     r = await session.execute(select(User).where(User.subject == subject).limit(1))
     u = r.scalar_one_or_none()
     digest = hash_password(password)
     if u is None:
-        u = User(subject=subject, email=email, password_hash=digest)
+        u = User(subject=subject, email=email, password_hash=digest, display_name=display_name)
         session.add(u)
         await session.flush()
-    elif u.password_hash is None:
-        u.password_hash = digest
-        u.email = email or u.email
+    else:
+        if u.password_hash is None:
+            u.password_hash = digest
+        if email:
+            u.email = email
+        if not u.display_name:
+            u.display_name = display_name
     return u
 
 
@@ -56,8 +68,10 @@ async def _ensure_membership(session: AsyncSession, user_id, tenant_id, role: st
 async def main() -> None:
     msp_email = (os.environ.get("SEED_MSP_EMAIL") or "msp@local").strip().lower()
     msp_pw = (os.environ.get("SEED_MSP_PASSWORD") or "msp-admin-demo").strip()
+    msp_name = (os.environ.get("SEED_MSP_DISPLAY_NAME") or "MSP Demo Admin").strip()
     cust_email = (os.environ.get("SEED_CUSTOMER_EMAIL") or "customer@local").strip().lower()
     cust_pw = (os.environ.get("SEED_CUSTOMER_PASSWORD") or "customer-demo").strip()
+    cust_name = (os.environ.get("SEED_CUSTOMER_DISPLAY_NAME") or "Demo Customer").strip()
 
     async with AsyncSessionLocal() as session:
         r = await session.execute(
@@ -85,12 +99,16 @@ async def main() -> None:
             print("seed_local_msp_demo: tenant demo-msp-customer already exists", flush=True)
 
         msp_subject = f"local:{msp_email}"
-        msp_user = await _ensure_user(session, msp_subject, msp_email, msp_pw)
+        msp_user = await _ensure_user(
+            session, msp_subject, msp_email, msp_pw, display_name=msp_name
+        )
         await _ensure_membership(session, msp_user.id, op.id, "msp_admin")
         print(f"seed_local_msp_demo: MSP user {msp_email} (msp_admin on operator)", flush=True)
 
         cust_subject = f"local:{cust_email}"
-        cust_user = await _ensure_user(session, cust_subject, cust_email, cust_pw)
+        cust_user = await _ensure_user(
+            session, cust_subject, cust_email, cust_pw, display_name=cust_name
+        )
         await _ensure_membership(session, cust_user.id, cust.id, "tenant_member")
         print(f"seed_local_msp_demo: customer user {cust_email} (member of demo-msp-customer)", flush=True)
 

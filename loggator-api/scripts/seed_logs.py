@@ -71,13 +71,15 @@ async def seed():
             "message": msg,
             "service": service,
             "host": f"node-{random.randint(1, 5)}",
+            "environment": "production",
             "trace_id": f"trace-{random.randint(10000, 99999)}",
             "duration_ms": random.randint(1, 10000) if "Request" in msg else None,
         })
 
     resp = await client.bulk(body=bulk_body, refresh=True)
     errors = [i for i in resp["items"] if "error" in i.get("index", {})]
-    ok = 200 - len(errors)
+    n_docs = len(bulk_body) // 2
+    ok = n_docs - len(errors)
     print(f"Seeded {ok} logs into {INDEX} at {OS_HOST}:{OS_PORT} ({len(errors)} errors)")
     await client.close()
 

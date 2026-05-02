@@ -8,7 +8,7 @@
 # UI: http://localhost:3000   API: http://localhost:8000/api/v1
 #
 # After migrate, `seed` creates demo-msp-customer + msp@local / msp-admin-demo + customer@local / customer-demo
-# (override with SEED_MSP_EMAIL, SEED_MSP_PASSWORD, SEED_CUSTOMER_EMAIL, SEED_CUSTOMER_PASSWORD).
+# (override with SEED_* env vars). `seed-opensearch` loads logs-app-local + logs-attack-local (matches logs-*).
 # Multi-tenant: GET /api/v1/tenants — send header X-Tenant-Id: <uuid> to scope data (default tenant if omitted).
 # Postgres + OpenSearch are internal; LLM defaults to host Ollama at host.docker.internal:11434.
 # Optional: create a .env next to this file with OLLAMA_MODEL=<name from `ollama list`> if not using default llama3.
@@ -73,9 +73,26 @@ services:
       SEED_MSP_PASSWORD: ${SEED_MSP_PASSWORD:-msp-admin-demo}
       SEED_CUSTOMER_EMAIL: ${SEED_CUSTOMER_EMAIL:-customer@local}
       SEED_CUSTOMER_PASSWORD: ${SEED_CUSTOMER_PASSWORD:-customer-demo}
+      SEED_MSP_DISPLAY_NAME: ${SEED_MSP_DISPLAY_NAME:-MSP Demo Admin}
+      SEED_CUSTOMER_DISPLAY_NAME: ${SEED_CUSTOMER_DISPLAY_NAME:-Demo Customer}
     depends_on:
       migrate:
         condition: service_completed_successfully
+    restart: "no"
+
+  seed-opensearch:
+    build:
+      context: ./loggator-api
+      dockerfile: Dockerfile
+    command: ["python", "scripts/seed_opensearch_demo.py"]
+    environment:
+      OPENSEARCH_HOST: opensearch
+      OPENSEARCH_PORT: "9200"
+      OPENSEARCH_USE_SSL: "false"
+      OPENSEARCH_VERIFY_CERTS: "false"
+    depends_on:
+      opensearch:
+        condition: service_healthy
     restart: "no"
 
   api:
@@ -111,6 +128,8 @@ services:
       migrate:
         condition: service_completed_successfully
       seed:
+        condition: service_completed_successfully
+      seed-opensearch:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/v1/status"]

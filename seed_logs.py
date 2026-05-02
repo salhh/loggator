@@ -1,10 +1,12 @@
 """
-Seed realistic error logs into OpenSearch to test the Loggator alerting flow.
-Run with: python seed_logs.py
-Requires: pip install opensearch-py
+Seed realistic logs into OpenSearch (host runs this against local :9200).
+
+Prefer the API copy for Docker: loggator-api/scripts/seed_logs.py
+and the one-shot wrapper: loggator-api/scripts/seed_opensearch_demo.py
 
 Env: OPENSEARCH_HOST (default localhost), OPENSEARCH_PORT (default 9200),
-     LOG_SEED_INDEX (default logs-app-local). Matches API index pattern logs-*.
+     LOG_SEED_INDEX (default logs-app-local),
+     OPENSEARCH_USE_SSL, OPENSEARCH_VERIFY_CERTS (same as API).
 """
 import os
 import random
@@ -13,15 +15,25 @@ from datetime import datetime, timedelta, timezone
 
 from opensearchpy import OpenSearch
 
+
+def _env_bool(key: str, default: bool) -> bool:
+    v = os.environ.get(key)
+    if v is None:
+        return default
+    return v.strip().lower() in ("1", "true", "yes")
+
+
 OS_HOST = os.environ.get("OPENSEARCH_HOST", "localhost")
 OS_PORT = int(os.environ.get("OPENSEARCH_PORT", "9200"))
 INDEX = os.environ.get("LOG_SEED_INDEX", "logs-app-local")
+OS_USE_SSL = _env_bool("OPENSEARCH_USE_SSL", False)
+OS_VERIFY = _env_bool("OPENSEARCH_VERIFY_CERTS", True)
 
 client = OpenSearch(
     hosts=[{"host": OS_HOST, "port": OS_PORT}],
     http_compress=True,
-    use_ssl=False,
-    verify_certs=False,
+    use_ssl=OS_USE_SSL,
+    verify_certs=OS_VERIFY,
 )
 
 SERVICES = [
@@ -87,30 +99,31 @@ def bulk_index(docs: list[dict]):
 
 
 def seed():
+    if not client.indices.exists(index=INDEX):
+        client.indices.create(index=INDEX, body={"mappings": {"properties": {"@timestamp": {"type": "date"}}}})
+        print(f"Created index: {INDEX}")
+
     now = datetime.now(timezone.utc)
     docs = []
 
-    print(f"Seeding logs into {INDEX} ...")
+    print(f"Seeding logs into {INDEX} at {OS_HOST}:{OS_PORT} ...")
 
-    # ── Spike: last 10 minutes — dense error burst (triggers anomaly + alert) ──
     print("  [1/3] Injecting error spike (last 10 min)...")
-    for i in range(120):
+    for _ in range(120):
         dt = now - timedelta(seconds=random.randint(0, 600))
-        level, msg = random.choice(ERROR_TEMPLATES[:10])  # heavy errors only
-        service = random.choice(SERVICES[:3])             # blame first 3 services
+        level, msg = random.choice(ERROR_TEMPLATES[:10])
+        service = random.choice(SERVICES[:3])
         docs.append(make_doc(level, msg, service, dt))
 
-    # ── Background: last 2 hours — mixed warn/error/info ──
     print("  [2/3] Injecting background activity (last 2 hours)...")
-    for i in range(200):
+    for _ in range(200):
         dt = now - timedelta(minutes=random.randint(11, 120))
         level, msg = random.choice(ERROR_TEMPLATES)
         service = random.choice(SERVICES)
         docs.append(make_doc(level, msg, service, dt))
 
-    # ── Noise: health checks / debug (should be filtered by preprocessor) ──
-    print("  [3/3] Injecting noise logs (should be filtered)...")
-    for i in range(50):
+    print("  [3/3] Injecting noise logs (should be filtered by preprocessor)...")
+    for _ in range(50):
         dt = now - timedelta(seconds=random.randint(0, 3600))
         level, msg = random.choice(NOISE)
         service = random.choice(SERVICES)
